@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: message-brokers-server
+  profiles:
+    active: {SPRING_PROFILES_ACTIVE:local}
+
+server:
+  error:
+    whitelabel:
+      enabled: false
