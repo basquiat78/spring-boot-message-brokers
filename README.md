@@ -118,7 +118,7 @@ spring:
 
 솔직히 공부용으로는 깊이가 좀 얇다는 것을 먼저 인정하면서 고고!
 
-[RabbitMQ를 이용한 메세지 큐 브랜치]()  
+[RabbitMQ를 이용한 메세지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/01-with-rabbitmq)  
 [Redis를 이용한 메세지 큐 브랜치]()   
 [Kafka를 이용한 메세지 큐 브랜치]()   
 [Nats를 이용한 메세지 큐 브랜치]()  
