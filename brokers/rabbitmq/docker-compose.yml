@@ -1,0 +1,21 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4.2.3-management
+    container_name: rabbitmq-server
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: basquiat
+      RABBITMQ_DEFAULT_PASS: basquiat
+      RABBITMQ_CONFIG_FILE: /etc/rabbitmq/rabbitmq.conf
+    entrypoint: >
+      bash -c "
+      echo 'loopback_users = none' > /etc/rabbitmq/rabbitmq.conf;
+      docker-entrypoint.sh rabbitmq-server"
+    ports:
+      - "5674:5672"
+      - "15674:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+volumes:
+  rabbitmq_data:

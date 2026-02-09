@@ -28,6 +28,41 @@ spring:
           fetch_size: 100
           batch_size: 100
     open-in-view: false
+  rabbitmq:
+    host: localhost
+    port: 5674
+    username: basquiat
+    password: basquiat
+    virtual-host: "/"
+    # 메시지가 브로커에 잘 도달했는지 확인
+    # 도달하지 못한 메시지를 되돌려받을지 여부
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    requested-heartbeat: 30s
+    connection-timeout: 10000ms
+    ssl:
+      enabled: false
+    template:
+      retry:
+        enabled: true
+        initial-interval: 1000ms
+        max-attempts: 3
+        multiplier: 2.0
+    listener:
+      simple:
+        # 성공적인 처리를 했다면 auto ack
+        acknowledge-mode: auto
+        prefetch: 1
+        concurrency: 2
+        max-concurrency: 5
+        # 에러시 재시도 정보 세팅
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 2000ms
+          multiplier: 2.0
+          max-interval: 10000ms
+        default-requeue-rejected: false
 
 springdoc:
   api-docs:
@@ -37,3 +72,11 @@ springdoc:
 
 server:
   port: 8080
+
+basquiat:
+  rabbitmq:
+    exchange-name: basquiat-exchange
+    queue-name: basquiat-queue
+    delay-exchange-name: basquiat-delay-exchange
+    delay-queue-name: basquiat-delay-queue
+    dlx-routing-key: dlx-default-routing-key

@@ -8,3 +8,7 @@ server:
   error:
     whitelabel:
       enabled: false
+
+app:
+  messaging:
+    use-amqp: true
