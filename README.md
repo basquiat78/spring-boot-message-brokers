@@ -452,13 +452,18 @@ class RabbitMqConfig(
 
     @Bean
     fun messageConverter(): Jackson2JsonMessageConverter {
-        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-        val converter = Jackson2JsonMessageConverter(mapper)
+        val rabbitMapper = mapper.copy()
+        rabbitMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+        val converter = Jackson2JsonMessageConverter(rabbitMapper)
         return converter
     }
 }
 ```
 먼저 재시도 및 큐채널 자동 등록을 위한 설정 그리고 지연 메시지를 사용할 수 있으니 이와 관련 빈을 등록하도록 한다.
+
+`messageConverter`의 경우에는 `utils` 패키지에서 사용하는 `mapper`를 복사해서 사용한다.
+
+이것은 각 메시지 브로커별로 독립적으로 사용해서 다른 브로커들과 분리를 하기 위한 방법이다.
 
 # 지연 큐
 
@@ -637,35 +642,25 @@ class RabbitMqEventSubscriber(
 
         handlers.forEach { handler ->
             val queueName = handler.channel.channelName
-            val adapter = createMessageListenerAdapter(handler)
-            containerFactory.createContainer(queueName, adapter).start()
-            log.info("Successfully subscribed: [${handler::class.simpleName}] -> Queue:[$queueName]")
+            val listener = createMessageListener(handler)
+            containerFactory.createContainer(queueName, listener).start()
+            log.info("Successfully RabbitMQ subscribed: [${handler::class.simpleName}] -> Queue:[$queueName]")
         }
     }
 
-    private fun createMessageListenerAdapter(handler: MessageHandler<*>): MessageListenerAdapter {
-        return object : MessageListenerAdapter() {
-            override fun onMessage(
-                message: Message,
-                channel: Channel?,
-            ) {
-                try {
-                    // MessageListenerAdapter에 넘겨주는 메시지 컨버터를 사용하게 된다.
-                    // 이것을 RabbitMQ에서 빈으로 등록한 컨버터를 사용하도록 레이블 사용
-                    val data = this@RabbitMqEventSubscriber.messageConverter.fromMessage(message)
-                    if (data == null) {
-                        log.warn("Converted data is null for message: $message")
-                        return
-                    }
-                    executeHandler(handler, data)
-                } catch (e: Exception) {
-                    log.error("Message handling failed: ${e.message}")
-                    throw e
+    private fun createMessageListener(handler: MessageHandler<*>): ChannelAwareMessageListener {
+        return ChannelAwareMessageListener { message, _ ->
+            try {
+                val data = messageConverter.fromMessage(message)
+                if (data == null) {
+                    log.warn("Converted data is null for message: $message")
+                    return@ChannelAwareMessageListener
                 }
+                executeHandler(handler, data)
+            } catch (e: Exception) {
+                log.error("RabbitMQ 리스너 처리 중 에러 발생: ${e.message}", e)
+                throw e
             }
-        }.apply {
-            @Suppress("UsePropertyAccessSyntax")
-            setMessageConverter(messageConverter)
         }
     }
 
@@ -674,7 +669,6 @@ class RabbitMqEventSubscriber(
         handler: MessageHandler<*>,
         data: Any,
     ) {
-        log.info("Processing Message from [${handler.channel.channelName}]")
         try {
             (handler as MessageHandler<Any>).handle(data)
         } catch (e: Exception) {
@@ -687,7 +681,7 @@ class RabbitMqEventSubscriber(
         handler: MessageHandler<*>,
         data: Any,
     ) {
-        log.error("[DEAD LETTER] retry failed. Queue: ${handler.channel.channelName} / message: $data")
+        log.error("[DEAD LETTER] 처리 실패. Queue: ${handler.channel.channelName} / message: $data")
     }
 }
 ```
@@ -697,8 +691,7 @@ class RabbitMqEventSubscriber(
 
 ```text
 1. 스프링 부트를 통해 등록된 핸들러 배열을 순회한다.
-2. 핸들러를 순회하면서 각 핸들러는 리스너 어댑터에 등록한다.
-3. 리스너 어댑터에 등록할 때 재시도 설정 옵션을 코드레벨에서 구현한다.
+2. 핸들러를 순회하면서 각 핸들러를 리스너에 등록한다.
 ```
 
 ## Pub/Sub 테스트
@@ -895,4 +888,4 @@ app:
 
 # Next Step
 
-[Redis를 이용한 메세지 큐 브랜치]()
+[Redis를 이용한 메세지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/02-with-redis)

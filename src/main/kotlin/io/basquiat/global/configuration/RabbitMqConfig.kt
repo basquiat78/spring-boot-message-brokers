@@ -118,8 +118,9 @@ class RabbitMqConfig(
 
     @Bean
     fun messageConverter(): Jackson2JsonMessageConverter {
-        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-        val converter = Jackson2JsonMessageConverter(mapper)
+        val rabbitMapper = mapper.copy()
+        rabbitMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+        val converter = Jackson2JsonMessageConverter(rabbitMapper)
         return converter
     }
 }
