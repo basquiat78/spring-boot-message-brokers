@@ -425,4 +425,4 @@ org.springframework.kafka.listener.ListenerExecutionFailedException: Listener fa
 
 # Next Step
 
-[Nats를 이용한 메시지 큐 브랜치]()
+[Nats를 이용한 메시지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/04-with-nats)
