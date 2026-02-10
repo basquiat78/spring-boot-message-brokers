@@ -98,12 +98,15 @@ class RedissonConfig(
     @Bean
     fun redissonClient(): RedissonClient {
         val config = Config()
+
+        val redissonMapper = mapper.copy()
+        
         config.apply {
             if (!redisPassword.isNullOrBlank()) {
                 password = redisPassword
             }
             nettyThreads = 16
-            codec = TypedJsonJacksonCodec(Any::class.java, mapper)
+            codec = TypedJsonJacksonCodec(Any::class.java, redissonMapper)
         }
 
         config.useSingleServer().apply {
@@ -238,122 +241,6 @@ class MessageRouter(
 
 컨셉 자체가 크게 벗어나지 않기 때문에 이렇게 세팅을 완료하고 바로 테스트 단계로 들어가보자
 
-
-# 테스트 전에 체크사항
-
-지금같이 세팅을 하게 되면 `Redis`는 작동을 잘 할 것이다.
-하지만 기존 `RabbitMQ`는 `Consumer`가 작동을 하지 않게 된다.
-
-로그를 살펴보니 `messageConvertor`관련 문제가 발생하게 된다.
-
-먼저 고민해 볼 것은 각 브로커별 환경설정에서 `mapper`세팅을 분리해서 작업하는 것이다.
-
-```kotlin
-@Bean
-fun messageConverter(): Jackson2JsonMessageConverter {
-    val rabbitMapper = mapper.copy()
-    rabbitMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-    val converter = Jackson2JsonMessageConverter(rabbitMapper)
-    return converter
-}
-
-@Bean
-fun redissonClient(): RedissonClient {
-    val config = Config()
-
-    val redissonMapper = mapper.copy()
-
-    config.apply {
-        if (!redisPassword.isNullOrBlank()) {
-            password = redisPassword
-        }
-        nettyThreads = 16
-        codec = TypedJsonJacksonCodec(Any::class.java, redissonMapper)
-    }
-
-    config.useSingleServer().apply {
-        address = "$protocol$redisHost:$redisPort"
-        database = redisDatabase
-        timeout = 3000
-        connectTimeout = 5000
-        connectionMinimumIdleSize = 10
-        connectionPoolSize = 15
-        retryAttempts = 3
-        retryDelay = ConstantDelay(Duration.ofMillis(100))
-    }
-    return try {
-        Redisson.create(config)
-    } catch (e: Exception) {
-        throw RuntimeException("Redisson 연결 실패! 주소: redis://$redisHost:$redisPort, 원인: ${e.message}", e)
-    }
-}
-```
-`copy`를 통해 `mapper`를 브로커별로 분리해서 서로 영향을 주지 않도록 먼저 세팅을 한다.
-
-또한 `RabbitMqEventSubscriber`에서 기존에 `createMessageListenerAdapter`를 통해 `MessageListenerAdapter` 대신 `ChannelAwareMessageListener`을 활용해서 분리를 시켜서 처리하자.
-
-```kotlin
-@file:Suppress("DEPRECATION")
-
-@Component
-@ConditionalOnAmqp
-class RabbitMqEventSubscriber(
-    private val containerFactory: RabbitMqListenerContainerFactory,
-    private val handlers: List<MessageHandler<*>>,
-    private val messageConverter: Jackson2JsonMessageConverter,
-) {
-    private val log = logger<RabbitMqEventSubscriber>()
-
-    @PostConstruct
-    fun init() {
-        if (handlers.isEmpty()) return
-
-        handlers.forEach { handler ->
-            val queueName = handler.channel.channelName
-            val listener = createMessageListener(handler)
-            containerFactory.createContainer(queueName, listener).start()
-            log.info("Successfully RabbitMQ subscribed: [${handler::class.simpleName}] -> Queue:[$queueName]")
-        }
-    }
-
-    private fun createMessageListener(handler: MessageHandler<*>): ChannelAwareMessageListener {
-        return ChannelAwareMessageListener { message, _ ->
-            try {
-                val data = messageConverter.fromMessage(message)
-                if (data == null) {
-                    log.warn("Converted data is null for message: $message")
-                    return@ChannelAwareMessageListener
-                }
-                executeHandler(handler, data)
-            } catch (e: Exception) {
-                log.error("RabbitMQ 리스너 처리 중 에러 발생: ${e.message}", e)
-                throw e
-            }
-        }
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun executeHandler(
-        handler: MessageHandler<*>,
-        data: Any,
-    ) {
-        try {
-            (handler as MessageHandler<Any>).handle(data)
-        } catch (e: Exception) {
-            handleFailureLog(handler, data)
-            throw e
-        }
-    }
-
-    private fun handleFailureLog(
-        handler: MessageHandler<*>,
-        data: Any,
-    ) {
-        log.error("[DEAD LETTER] 처리 실패. Queue: ${handler.channel.channelName} / message: $data")
-    }
-}
-```
-
 # Pub/Sub 테스트
 
 ```kotlin
@@ -392,6 +279,23 @@ app:
 ```
 
 단 `RedissonConfig`은 캐쉬 및 분산락을 위해서 항상 빈으로 등록하도록 해당 애노테이션을 달지 않을 것이다.
+
+# 주의 사항
+
+스프링에서는 구동시에 자동으로 빈을 등록하는 기능이 있다.
+따라서 위에 조건부 애노테이션을 달더라도 빈을 등록하다가 에러가 발생하는 경우가 있다.
+
+이런 경우에는 서버가 실행되는 진입점에 `이것은 빈으로 등록하지 말아줘`라고 알려줘야 한다.
+
+```kotlin
+@SpringBootApplication(
+    exclude = [
+        org.redisson.spring.starter.RedissonAutoConfiguration::class
+    ]
+)
+@ConfigurationPropertiesScan
+class SpringWithBrokersApplication
+```
 
 # Next Step
 
