@@ -12,3 +12,4 @@ server:
 app:
   messaging:
     use-amqp: true
+    use-redis: true

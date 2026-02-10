@@ -63,6 +63,19 @@ spring:
           multiplier: 2.0
           max-interval: 10000ms
         default-requeue-rejected: false
+  data:
+    redis:
+      host: localhost
+      port: 6400
+      password:
+      database: 0
+      timeout: 2000
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+
 
 springdoc:
   api-docs:
@@ -80,3 +93,8 @@ basquiat:
     delay-exchange-name: basquiat-delay-exchange
     delay-queue-name: basquiat-delay-queue
     dlx-routing-key: dlx-default-routing-key
+
+redisson:
+  protocol: "redis://"
+  # 상용이나 ssl을 적용해야 한다면
+  # protocol: "rediss://"

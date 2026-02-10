@@ -20,6 +20,7 @@ class MessageRouter(
         val publisher =
             when (type) {
                 BrokerType.RABBITMQ -> publishers["rabbitEventPublisher"]
+                BrokerType.REDIS -> publishers["redisEventPublisher"]
                 else -> null
             } ?: notSupportBrokers("지원하지 않는 브로커 타입입니다: $type")
 

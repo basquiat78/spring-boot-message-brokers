@@ -33,12 +33,17 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-aspectj")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.springframework.boot:spring-boot-starter-cache")
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
 
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.1")
 
     // RabbitMQ
     implementation("org.springframework.retry:spring-retry:2.0.12")
     implementation("org.springframework.boot:spring-boot-starter-amqp")
+
+    // redisson
+    implementation("org.redisson:redisson-spring-boot-starter:4.2.0")
 
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
