@@ -114,13 +114,14 @@ spring:
 # Step
 
 다음과 같이 진행이 될 것이다.
-어짜피 재미로 해보는 것이니 메세지 브로커를 사용해 보고나 공부해 보고 싶은 분들은 참고하시면 될것이다.
+어짜피 재미로 해보는 것이니 메시지 브로커를 사용해 보고나 공부해 보고 싶은 분들은 참고하시면 될것이다.
 
 솔직히 공부용으로는 깊이가 좀 얇다는 것을 먼저 인정하면서 고고!
 
-[RabbitMQ를 이용한 메세지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/01-with-rabbitmq)  
-[Redis를 이용한 메세지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/02-with-redis)   
-[Kafka를 이용한 메세지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/03-with-kafka)   
-[Nats를 이용한 메세지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/04-with-nats)  
+[RabbitMQ를 이용한 메시지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/01-with-rabbitmq)  
+[Redis를 이용한 메시지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/02-with-redis)   
+[Kafka를 이용한 메시지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/03-with-kafka)   
+[Nats를 이용한 메시지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/04-with-nats)  
 [번외 - Redis를 이용한 캐쉬 전략]()   
 [번외 - Redis를 분삭락 전략]()   
+[번외 - Kafka Streams]()
