@@ -75,7 +75,67 @@ spring:
           max-active: 20
           max-idle: 10
           min-idle: 5
-
+  kafka:
+    bootstrap-servers: localhost:9094
+    listener:
+      # 수동 커밋 모드
+      ack-mode: manual_immediate
+      # 파티션 개수와 일치시켜 병렬성을 극대화
+      concurrency: 3
+      # 가상 스레드 환경에서는 폴링 대기 시간
+      poll-timeout: 3000ms
+    producer:
+      # 0: 브로커가 받았는지 확인조차 안 함 / 1: 리더 브로커만 저장하면 성공 간주 / all (-1): 리더 + 모든 복제본이 저장해야 성공 간주
+      acks: all
+      retries: 3
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        # 요청 대기 시간
+        request.timeout.ms: 30000
+        # 대기 시간
+        linger.ms: 10
+        # 전송에 걸리는 최대 시간 제한 (요청 대기 및 대기 시간보다 크게 잡아야 함)
+        delivery.timeout.ms: 120000
+        # 재시도 사이의 간격
+        retry.backoff.ms: 1000
+        # 가상 스레드 환경에서 처리량을 높이기 위한 배치 설정
+        batch.size: 32768
+        # 성능과 압축률의 최적 밸런스
+        compression.type: lz4
+        # 타입 정보를 신뢰할 수 없을 때의 폴백 로직
+        spring.json.add.type.headers: true
+        # 멱등성 프로듀서 활성화 (중복 전송 방지)
+        # acks를 all로 사용할 경우 묶어서 설정한다.
+        enable.idempotence: true
+        # 전송 순서 보장을 위한 최대 인플라이트 요청 수
+        max.in.flight.requests.per.connection: 5
+    consumer:
+      group-id: basquiat-group
+      # 오래된 메시지부터 순차적으로 읽을 것인지 (earliest)/ 됐고! 지금부터 들어오는 것을 읽을 것이지 (latest) 여부
+      auto-offset-reset: earliest
+      # 수동 ACK를 사용하기 위해 매뉴얼 모드 명시
+      enable-auto-commit: false
+      # 대량 처리시 유용, 단 이경우에는 메세지기 하나씩 오는게 아닌 리스트 형태로 오게 된다.
+      # 하지만 가상 스레드 환경에서 단건으로 처리하도록 주석 처리
+      # listener.type: batch
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        # 직렬화 할때 해당 패키지의 dto는 믿을 수 있다는 것을 명시한다.
+        spring.json.trusted.packages: "io.basquiat.*"
+        # 타입 정보를 신뢰할 수 없을 때의 폴백 로직
+        spring.json.use.type.headers: true
+        # 가상 스레드 환경에서 리밸런싱 전략 최적화
+        # Stop-the-world 현상을 최소화 -> 진행하고 있는 것은 그대로, 남는 것을 나눠서
+        partition.assignment.strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor
+        # 가상 스레드 환경에서 세션 및 하트비트 설정
+        session.timeout.ms: 45000
+        max.poll.interval.ms: 300000
+        # 한 번의 poll로 가져올 최대 레코드 수
+        # 보통 가상 스레드 환경에서는 50에서 100개를 권장
+        max.poll.records: 50
 
 springdoc:
   api-docs:

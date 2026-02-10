@@ -37,11 +37,11 @@ class RabbitMqPubSubTest
 
         @Test
         fun `RabbitMQ pub-sub 테스트`() {
-            // Given: 전송할 데이터 준비
+            // given
             val alarmToBotMessage = AlarmToBot(message = "봇으로 알람 보내기")
             val alarmToLogMessage = AlarmToLog(message = "로그 봇으로 알람 보내기", extra = "extra data")
 
-            // When
+            // when
             messageRouter.send(BrokerChannel.ALARM_TO_BOT, BrokerType.RABBITMQ, alarmToBotMessage)
             messageRouter.send(BrokerChannel.ALARM_TO_LOG, BrokerType.RABBITMQ, alarmToLogMessage)
 
