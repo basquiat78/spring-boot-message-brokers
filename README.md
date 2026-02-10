@@ -439,4 +439,4 @@ class RedisEventSubscriber(
 
 # Next Step
 
-[Kafka를 이용한 메세지 큐 브랜치]()
+[Kafka를 이용한 메세지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/03-with-kafka)
