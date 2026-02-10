@@ -95,6 +95,7 @@ basquiat:
     dlx-routing-key: dlx-default-routing-key
 
 redisson:
+  group-name: basquiat-consumer-group
   protocol: "redis://"
   # 상용이나 ssl을 적용해야 한다면
   # protocol: "rediss://"

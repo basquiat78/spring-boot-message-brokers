@@ -21,7 +21,7 @@ class RedisPubSubTest
         private val messageRouter: MessageRouter,
     ) {
         @Test
-        fun `REDIS를 통한 publish, consume 테스트`() {
+        fun `Redis를 통한 publish, consume 테스트`() {
             // When
             messageRouter.send(BrokerChannel.ALARM_TO_BOT, BrokerType.REDIS, AlarmToBot(message = "봇으로 알람 보내기 from Redis"))
             messageRouter.send(BrokerChannel.ALARM_TO_LOG, BrokerType.REDIS, AlarmToLog(message = "로그 봇으로 알람 보내기 from Redis"))

@@ -297,6 +297,146 @@ app:
 class SpringWithBrokersApplication
 ```
 
+# 하지만 이 방식은 문제가 있다.
+
+`RabbitMQ`와 달리 지금까지 완성한 코드는 여러개의 컨슈머가 있는 상황이면 모든 컨슈머가 동시에 같은 작업을 할 수 있는 구조이다.
+
+사실 이런 이유로 `Redis`는 캐시, 분산락 같은 메모리 디비나 특정 기능에 사용하고 메시지 브로커로는 `RabbitMQ`나 `Kafka`를 사용하는 방식이 오히려 나을 수 있다.
+
+만일 그게 아닌 그저 발행자는 발행하고 다른 모든 컨슈머가 받아서 처리해야 하는 상황이라면 이 상태로도 충분히 그 역할을 할 수 있다.
+
+하지만 그게 아니라면 `Redis`에서도 `Streams`방식을 통해 여러 개의 컨슈머중 하나만 처리하도록 작업이 가능하다.
+
+참고로 이 방식을 사용하기 위해서는 `Redis 5.x`버전 이상을 사용해야 한다.
+
+# Redis Streams (Consumer Group)
+
+기존의 방식이 아닌 `Streams`를 통해 중복 처리 방지를 해야 한다.
+
+이 때 컨슈머 그룹을 통해 하나의 단위로 묶고 그룹내에서 한명의 컨슈머만 처리하도록 하는 방식으로 진행한다.
+
+방식이 달리진 만큼 `Publisher`도 변경이 되야 한다.
+
+```kotlin
+@ConditionalOnRedis
+@Service("redisEventPublisher")
+class RedisEventPublisher(
+    private val redissonClient: RedissonClient,
+) : MessagePublisher {
+    private val log = logger<RedisEventPublisher>()
+
+    override fun <T : Any> publish(
+        channel: BrokerChannel,
+        message: T,
+    ) {
+        // RedisChannel에 정의된 타입과 메시지 타입이 일치하는지 확인한다.
+        if (!channel.type.isInstance(message)) notMatchMessageType("채널 ${channel.channelName}에 맞지 않는 메시지 타입입니다.")
+
+        val stream = redissonClient.getStream<String, T>(channel.channelName)
+
+        stream
+            .addAsync(StreamAddArgs.entry("payload", message))
+            .thenAccept { id ->
+                log.info("Successfully Redis subscriber id: $id")
+            }.exceptionally { e ->
+                log.error("Failed to publish message to Redis Stream: ${e.message}")
+                null
+            }
+    }
+}
+```
+기존 토픽에서 `publish`는 방식에서 `redissonClient`로 부터 `Stream`을 가져와 `payload`에 메시지를 보내는 형식으로 바뀌게 된다.
+
+당연히 리스너쪽도 변경이 되어야 한다.
+
+그 전에 컨슈머 그룹을 만들기 위해 
+
+```yaml
+redisson:
+  group-name: basquiat-consumer-group
+  protocol: "redis://"
+```
+
+`yaml`파일에 그룹 명 정보를 추가하자.
+
+```kotlin
+@Component
+@ConditionalOnRedis
+class RedisEventSubscriber(
+    private val redissonClient: RedissonClient,
+    private val handlers: List<MessageHandler<*>>,
+    private val taskExecutor: TaskExecutor,
+    @Value($$"${redisson.group-name:consumer-group}")
+    private val groupName: String,
+) {
+    private val log = logger<RedisEventSubscriber>()
+
+    @PostConstruct
+    fun init() {
+        if (handlers.isEmpty()) {
+            log.warn("등록된 핸들러가 없습니다. redis 리스너를 생성하지 않습니다.")
+            return
+        }
+        handlers.forEach { handler ->
+            setupStreamSubscription(handler)
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> setupStreamSubscription(handler: MessageHandler<T>) {
+        val streamName = handler.channel.channelName
+        val targetType = handler.channel.type
+        val stream = redissonClient.getStream<String, T>(streamName)
+
+        try {
+            val streamCreateGroupArgs = StreamCreateGroupArgs.name(groupName).id(StreamMessageId.ALL).makeStream()
+            stream.createGroup(streamCreateGroupArgs)
+        } catch (e: Exception) {
+            log.error("Consumer group [$groupName] already exists for stream [$streamName] / ${e.message}")
+        }
+
+        taskExecutor.execute {
+            log.info("Starting Stream polling: [${handler::class.simpleName}] on Group:[$groupName]")
+            while (!Thread.currentThread().isInterrupted) {
+                try {
+                    // message를 가져올 때 읽지 않은 메세지를 가져오도록 처리한다.
+                    val messages =
+                        stream.readGroup(
+                            groupName,
+                            "consumer-${randomUUID()}",
+                            StreamReadGroupArgs.neverDelivered().count(1).timeout(Duration.ofSeconds(5)),
+                        )
+
+                    messages.forEach { (id, content) ->
+                        try {
+                            val message = content["payload"] as Any
+                            val data = convertMessage(message, targetType) as T
+                            handler.handle(data)
+                            stream.ack(groupName, id)
+                        } catch (e: Exception) {
+                            log.error("Handler execution failed for message $id: ${e.message}")
+                        }
+                    }
+                } catch (e: Exception) {
+                    log.error("Stream polling error on [$streamName]: ${e.message}")
+                    Thread.sleep(2000)
+                }
+            }
+        }
+        log.info("Successfully registered Redis Stream Consumer: [${handler::class.simpleName}]")
+    }
+}
+```
+코드를 보면 독특한 부분이 있는데 컨슈머가 직접 메시지를 읽어야 하는 `pulling`방식이라는 것을 알 수 있다.
+
+그래서 그룹명으로 먼저 스트림즈에 그룹을 생성하고 그 그룹에 컨슈머들을 등록한다.
+
+`pulling`방식을 효율적으로 처리하기 위해서 쓰레드방식을 사용해서 컨슈머가 메시지를 가져온다.
+
+가져오는 부분은 `readGroup`을 보면 알겠지만 그룹내에서 읽지 않은 메시지를 가져와서 처리하는 방식으로 구성되어져 있다.
+
+코드내에는 기존 코드를 주석처리했으니 필요에 따라 선택적으로 사용하면 될거 같다.
+
 # Next Step
 
 [Kafka를 이용한 메세지 큐 브랜치]()
