@@ -45,6 +45,10 @@ dependencies {
     // redisson
     implementation("org.redisson:redisson-spring-boot-starter:4.2.0")
 
+    // Kafka
+    implementation("org.springframework.boot:spring-boot-starter-kafka")
+    implementation("org.apache.kafka:kafka-streams")
+
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")

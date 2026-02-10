@@ -1,302 +1,114 @@
-# Install Redis
+# Install Kafka
 
-기존에 사용하는 `Reids`가 있다면 이 부분은 건너뛰어도 상관없다.
+여기서는 `Zookeeper`가 아닌 `KRaft`기반의 `Kafka`를 사용해 볼 생각이다.
 
-만일 테스트용으로 로컬에서 구동하겠다면 `RabbitMQ`처럼 `brokers > redis` 폴더의 `docker-compose.yml`을 실행해서 로컬에서 테스트해볼 수 있다.
- 
-```yaml
-spring:
-  config:
-    activate:
-      on-profile: local
-  data:
-    redis:
-      host: localhost
-      port: 6400
-      password:
-      database: 0
-      timeout: 2000
-      lettuce:
-        pool:
-          max-active: 20
-          max-idle: 10
-          min-idle: 5
-  # 기존 설정...
+```shell
+# 실행
+root>brokers>kafka> docker compose up -docker
 
-
-redisson:
-  protocol: "redis://"
-  # 상용이나 ssl을 적용해야 한다면
-  # protocol: "rediss://"
+# 내린다면
+root>brokers>kafka> docker compose down -v
 ```
 
-이미 사용중인 `Amazon elasticCache`를 사용한다면 해당 정보로 세팅을 한다.
+`docker-compose.yml`에는 `ui`도 설정했다.
 
-`Redis`는 `GUI`가 존재한다.
+실행이후 [kafka ui](http://localhost:8090/)
 
-무료 버전으로 사용하고 싶다면
+주키퍼를 사용할 때는 카프카용 `ui`을 따로 썼던 기억이 나는데 아예 같이 제공한다.
 
-[Redis Insight](https://redis.io/insight/)를 통해서 설치해서 사용하면 된다.
+군더더기 없고 단순하며 깔끔하다.
 
-# About Redis
+# About Kafka
 
-처음 `Redis`를 접하게 된 것은 `pub/sub`때문이었다.
+이게 최근에 대용량 트래픽 관련해서 언급되서 최근 기술로 알수 있지만 역사가 꽤 오래되었다.
 
-하지만 `Redis`는 `Key–Value` 형식의 메모리 기반 데이터 구조 저장소로 대표적인 `in-Memory DB`이다.
+2010년에 `LinkedIn`에서 내부적으로 사용하기 위해 개발된 것이고 2011년에 아파치 재단에서 등록되면서 알려진 메시지 브로커로 작게 보면 그렇다.
 
-이 외에도 스프링 프레임워크를 사용할 때 세션 기반의 경우에는 세션 저장소나 캐쉬 그리고 리스트 기반의 큐를 설정에 따라 `FIFO(First-In, First-Out)`나 `LIFO(Last-In, First-Out)`를 구현할 수도 있다.
+하지만 메시지 브로커 기능을 포함한 `분산 이벤트 스트리밍 플랫폼`이라고 보는게 맞을 것이다.
 
-`ZSET`같이 랭킹 관련에 특화된 자료구조 형식등 다양한 자료구조를 활용할 수 있고 분산 락 구현에 각광받는다.
-
-`Streams`도 지원한다.
-
-이렇게 다양한 장점들은 이미 많이 알려져 있기 때문에 이정도 선에서만 설명을 마친다.
-
-# 스프링 부트에서 활용해 보자
-
-스프링에서는 이것을 위한 라이브러리를 제공한다.
-
-또한 `Redisson`을 사용할 것이기 때문에 다음과 같이 추가적으로 그레이들에 추가를 한다.
-
-```groovy
-    implementation("org.springframework.boot:spring-boot-starter-cache")
-    implementation("org.springframework.boot:spring-boot-starter-data-redis")
-
-    implementation("org.redisson:redisson-spring-boot-starter:4.2.0")
-```
-
-`Redisson`의 최신 버전은 작성된 시점에서는 `4.2.0`버전이다.
-
-캐쉬는 혹시 사용해 볼 생각이기 때문에 같이 추가를 한다.
-
-기존 `build.gradle.kts`에 의존성을 적용하자.
-
-# 기존 방식에서 벗어나서 직접 리스너를 등록하도록 설정하자.
-
-스프링 부트에서는 `Consumer`를 구현하는 방식은 간단하게 리스너 애노테이션을 달아서 처리할 수 있었던 `RabbitMQ`와는 달리 자체 리스너 애노테이션을 제공하진 않는다.
-
-애초에 `Redis`는 `In-Memory Data Structure Store`가 근간이라 `pub/sub`은 사실 부가적인 기능이라 할 수 있다.
-
-그래서 `Spring Data`프로젝트에 포함된 `Redis`는 `RabbitMQ`에서 애노테이션 대신 직접 등록하도록 설계되어 있다.
-
-여기서는 `Redisson`을 이용할 것이기 때문에 먼저 `RedissonConfig`를 작성하자.
-
-```kotlin
-@Configuration
-class RedissonConfig(
-    @Value($$"${spring.data.redis.host:localhost}")
-    private val redisHost: String,
-    @Value($$"${spring.data.redis.port:6379}")
-    private val redisPort: Int,
-    @Value($$"${spring.data.redis.password:}")
-    private val redisPassword: String?,
-    @Value($$"${spring.data.redis.database:0}")
-    private val redisDatabase: Int,
-    @Value($$"${redisson.protocol:redis://}")
-    private val protocol: String,
-) {
-    @Bean
-    fun redissonClient(): RedissonClient {
-        val config = Config()
-
-        val redissonMapper = mapper.copy()
-        
-        config.apply {
-            if (!redisPassword.isNullOrBlank()) {
-                password = redisPassword
-            }
-            nettyThreads = 16
-            codec = TypedJsonJacksonCodec(Any::class.java, redissonMapper)
-        }
-
-        config.useSingleServer().apply {
-            address = "$protocol$redisHost:$redisPort"
-            database = redisDatabase
-            timeout = 3000
-            connectTimeout = 5000
-            connectionMinimumIdleSize = 10
-            connectionPoolSize = 15
-            retryAttempts = 3
-            retryDelay = ConstantDelay(Duration.ofMillis(100))
-        }
-        return try {
-            Redisson.create(config)
-        } catch (e: Exception) {
-            throw RuntimeException("Redisson 연결 실패! 주소: redis://$redisHost:$redisPort, 원인: ${e.message}", e)
-        }
-    }
-}
-```
-일반적인 `Redisson`의 환경설정 구성이다.
-
-# Producer 구현
-
-`Redisson`을 통해서 메시지를 전달하는 방식은 단순하다.
-채널 정보로 `topic`을 생성하고 이것을 통해 메시지를 전달하는 방식이다.
-
-
-```kotlin
-@Service("redisEventPublisher")
-class RedisEventPublisher(
-    private val redissonClient: RedissonClient,
-) : MessagePublisher {
-    private val log = logger<RedisEventPublisher>()
-
-    override fun <T : Any> publish(
-        channel: BrokerChannel,
-        message: T,
-    ) {
-        // RedisChannel에 정의된 타입과 메시지 타입이 일치하는지 확인한다.
-        if (!channel.type.isInstance(message)) notMatchMessageType("채널 ${channel.channelName}에 맞지 않는 메시지 타입입니다.")
-
-        val topic = redissonClient.getTopic(channel.channelName)
-        topic
-            .publishAsync(message)
-            .thenAccept { subscriber ->
-                log.info("subscriber: $subscriber")
-            }
-    }
-}
-```
-코드 자체는 정말 단순하다.
-
-# Consumer 구현
-
-`RabbitMQ`처럼 처리할 수 있다.
-
-```kotlin
-@Component
-class RedisEventSubscriber(
-    private val redissonClient: RedissonClient,
-    private val handlers: List<MessageHandler<*>>,
-) {
-    private val log = logger<RedisEventSubscriber>()
-
-    /**
-     * 해당 코드를 수정하지 않고 RedisMessageHandler를 구현한 핸들러를 추가하면 자동으로 구독할 수 있도록 한다.
-     */
-    @PostConstruct
-    fun init() {
-        if (handlers.isEmpty()) {
-            log.warn("등록된 핸들러가 없습니다. redis 리스너를 생성하지 않습니다.")
-            return
-        }
-        handlers.forEach { handler ->
-            subscriptionSetup(handler)
-        }
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun <T> subscriptionSetup(handler: MessageHandler<T>) {
-        val channel = handler.channel
-        val topic = redissonClient.getTopic(channel.channelName)
-        val messageType = channel.type as Class<T>
-
-        topic.addListener(Any::class.java) { _, message ->
-            try {
-                val finalMessage = convertMessage(message, messageType)
-                handler.handle(finalMessage)
-            } catch (e: Exception) {
-                log.error("메시지 변환 또는 핸들러 실행 중 오류 발생: ${e.message}", e)
-            }
-        }
-        log.info("Redis 채널 자동 구독 완료: ${channel.channelName}")
-    }
-}
-```
-다만 `RabbitMQ`와는 달리 `BrokerUtil`에 작성한 `convertMessage`를 활용해서 사용할 것이다.
-
-코드 자체는 이전과 거의 흡사하다.
-
-`MessageHandler`를 구현한 핸들러를 `SpEL`을 통해서 `List`로 `DI`를 받고 루프를 돌면서 리스너에 등록하는 방식이다.
-
-# MessageRouter 업데이트
-
-이제는 `Redis`를 통해서 메시지를 발행할 수 있도록 다음과 같이 수정한다.
-
-크게 어려운 부분은 없을 것이다.
-
-```kotlin
-@Component
-class MessageRouter(
-    private val publishers: Map<String, MessagePublisher>,
-) {
-    fun <T : Any> send(
-        channel: BrokerChannel,
-        type: BrokerType,
-        message: T,
-        delayMillis: Long? = null,
-    ) {
-        val publisher =
-            when (type) {
-                BrokerType.RABBITMQ -> publishers["rabbitEventPublisher"]
-                BrokerType.REDIS -> publishers["redisEventPublisher"]
-                else -> null
-            } ?: notSupportBrokers("지원하지 않는 브로커 타입입니다: $type")
-
-        publisher.publish(channel, message, delayMillis)
-    }
-}
-```
-
-컨셉 자체가 크게 벗어나지 않기 때문에 이렇게 세팅을 완료하고 바로 테스트 단계로 들어가보자
-
-# Pub/Sub 테스트
-
-```kotlin
-@Test
-fun `REDIS를 통한 publish, consume 테스트`() {
-    // When
-    messageRouter.send(BrokerChannel.ALARM_TO_BOT, BrokerType.REDIS, AlarmToBot(message = "봇으로 알람 보내기 from Redis"))
-    messageRouter.send(BrokerChannel.ALARM_TO_LOG, BrokerType.REDIS, AlarmToLog(message = "로그 봇으로 알람 보내기 from Redis"))
-    messageRouter.send(BrokerChannel.ALARM_TO_BOT, BrokerType.RABBITMQ, AlarmToBot(message = "봇으로 알람 보내기 from RabbitMQ"))
-    messageRouter.send(BrokerChannel.ALARM_TO_LOG, BrokerType.RABBITMQ, AlarmToLog(message = "로그 봇으로 알람 보내기 from RabbitMQ"))
-
-    // then
-    Thread.sleep(5000)
-}
-```
-다음과 같이 `Redis`, `RabbitMQ`에 메시지를 발행하자.
-
+문득 이런 생각이 들것이다.
 
 ```text
-2026-02-09T18:24:08.516+09:00  INFO 45379 --- [message-brokers-server] [  redisson-3-14] i.b.g.b.c.handler.AlarmToLogHandler      : 로그로 보내는 알람 메세지 정보: AlarmToLog(message=로그 봇으로 알람 보내기 from Redis, extra=null)
-2026-02-09T18:24:08.516+09:00  INFO 45379 --- [message-brokers-server] [  redisson-3-13] i.b.g.b.c.handler.AlarmToBotHandler      : 봇으로 보내는 알람 메세지 정보: AlarmToBot(message=봇으로 알람 보내기 from Redis)
-2026-02-09T18:24:08.519+09:00  INFO 45379 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.c.handler.AlarmToBotHandler      : 봇으로 보내는 알람 메세지 정보: AlarmToBot(message=봇으로 알람 보내기 from RabbitMQ)
-2026-02-09T18:24:08.526+09:00  INFO 45379 --- [message-brokers-server] [pool-2-thread-6] i.b.g.b.c.handler.AlarmToLogHandler      : 로그로 보내는 알람 메세지 정보: AlarmToLog(message=로그 봇으로 알람 보내기 from RabbitMQ, extra=null)
-```
-다른 로그는 다 지우고 유의미한 로그만 남기면 4개의 메시지가 전부 발행이 잘되고 리스너를 통해 각 `Consumer`들이 받아서 처리한 것을 볼 수 있다.
-
-# 이외의 작업
-
-`RabbitMQ`처럼 애노테이션을 만들어 빈으로 등록할지 말지 선택하도록 `@ConditionalOnRedis`을 작업한다.
-
-```yaml
-app:
-  messaging:
-    use-amqp: true
-    use-redis: true
+RabbitMQ랑 차이가 뭐야???
 ```
 
-단 `RedissonConfig`은 캐쉬 및 분산락을 위해서 항상 빈으로 등록하도록 해당 애노테이션을 달지 않을 것이다.
+# 파티션 개념
 
-# 주의 사항
+데이터를 토픽으로 나누는 부분까지는 비슷해 보인다.
 
-스프링에서는 구동시에 자동으로 빈을 등록하는 기능이 있다.
-따라서 위에 조건부 애노테이션을 달더라도 빈을 등록하다가 에러가 발생하는 경우가 있다.
+하지만 카프카는 이 토픽을 여러 파티션에 분할을 한다.
 
-이런 경우에는 서버가 실행되는 진입점에 `이것은 빈으로 등록하지 말아줘`라고 알려줘야 한다.
+쉽게 말하면 파티션은 로그로 순서대로 디스크에 기록이 되는 방식인데 이걸 카프카에서는 `append-only`로그라고 부른다.
 
-```kotlin
-@SpringBootApplication(
-    exclude = [
-        org.redisson.spring.starter.RedissonAutoConfiguration::class
-    ]
-)
-@ConfigurationPropertiesScan
-class SpringWithBrokersApplication
+그러면 파티션 단위로 기록을 하냐는 의문이 들 수 있는데 이것은 확장을 위해서이다.
+
+클러스터를 구성한다고 하면 파티션 단위로 클러스터내의 여러 브로커에 분산이 용이하고 이것은 복제도 마찬가이다.
+
+그래서 클러스터를 통한 수평적인 확장이 쉬워진다는 개념이다.
+
+`Consumer`쪽에 특징이 또 있다.
+
+`Consumer Group`이라 해서 같은 그룹내의 소비자들은 파티션 개념으로 파티션을 나눠서 읽어서 처리 가능하게 구현되었다.
+이에 대한 장점은 로드밸런싱, 장애 관련 문제를 처리하는데 특화되어 있다고 한다.
+
+여기서 `offset`이라는 개념이 있는데 `Consumer Group`은 이 `offset`을 기준으로 데이터를 읽는다.
+
+이것은 `Consumer`측에서 어디까지 메시지를 읽고 소비했는지 알 수 있게 된다.
+
+# 메시지 보관
+
+`docker-compose.yml`을 보면 `retention` 부분이 눈에 띈다. 
+
+디스크에 기록되는 데이터들은 이 정보를 기준으로 데이터를 보관하고 오래된 데이터를 삭제하는 기능을 가지고 있다.
+
+단순하게 휘발성 메시지가 아니라는 의미인데 `Consumer`측에서 소비한 메시지를 삭제하는 구조가 아니고 로그에 기록하고 기능에 따라 삭제를 한다.
+
+# 확장성
+
+파티션 개념으로 인해서 수평확장에 대한 언급을 했는데 이 파티션을 늘려서 브로커를 추가하면 무중단 운영이 가능하다고 한다.
+
+뭐 이렇게 운영을 해 본 적이 없어서 몸으로 느껴보진 않았지만 많은 사례들이나 동료들의 이야기를 보면 이게 꽤 강력한가 보다.
+
+# 이외의 장점들
+
+그 외에도 `Backpressure`가 가능하다.
+
+뭐 백프레셔는 처리량을 조절하는 부분하는 부분이니 이 부분도 눈에 띄기도 한다.
+
+위에서 `offset`과 일정 기간 로그에 기록한다고 언급했는데 이런 기능으로 `Consumer`측에서 이 `offset`를 세팅해서 기록된 과거 데이터를 다시 읽고 처리가 가능하다.
+
+로그를 다시 분석하거나 할 때 유용하다고 하니 장점이라고 할 수 있을 것이다.
+
+또한 에코시스템이 잘 되어 있다고 한다.
+
+스트림 처리라든가 외부 시스템과의 연동등 장점들이 많은 것이 카프카이다!!
+
+# 자 그래서??
+
+사실 이렇게 보면 카프카를 단순하게 `pub/sub`을 위해서 사용하는 것은 오버스펙이다.
+
+`RabbitMQ`나 그외 메시지 브로커들로도 충분히 커버가 가능하다는 의미이다.
+
+하지만 최소한 카프카를 어떻게 활용해야 하는지는 이 부분에서부터 시작한다고 할 수 있다.
+
+이를 통해서 이후 `Kafka Streams`나 실시간으로 데이터 스트림을 처리하기 위한 분산 처리 프레임워크인 아파치 `Flink`를 사용할 수 있지 않을까?
+
+이벤트 버스로 볼 수 있는 `pub/sub`을 기반으로 다양한 기능을 활용할 수 있는 플랫폼인 만큼 이정도는 알고 이후 아이디어를 얻을 수 있을 것이라 본다.
+
+# 그레이들 세팅
+
+```groovy
+implementation("org.springframework.boot:spring-boot-starter-kafka")
+// kafka-streams
+implementation("org.apache.kafka:kafka-streams")
 ```
 
-# Next Step
+사실 지금같이 그냥 메시지를 주고 받고 무언가를 처리한다면 `kafka-streams`는 불필요하다.
 
-[Kafka를 이용한 메세지 큐 브랜치]()
+하지만 실시간으로 데이터를 처리해야 한다면 `Streams`방식을 고려해 봐야 한다.
+
+일단 저것도 같이 세팅을 하자.
+
+# 지금까지 한 방식으로 리스너 등록
+
+카프카 역시 래빗엠큐처럼 `@KafkListener`를 제공한다.

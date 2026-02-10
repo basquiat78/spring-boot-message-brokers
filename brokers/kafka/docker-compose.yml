@@ -1,0 +1,121 @@
+services:
+  kafka:
+    # KRaft Mode
+    image: confluentinc/cp-kafka:7.8.0
+    container_name: kafka-local
+    ports:
+      # 호스트포트:컨테이너포트
+      - "9094:9094"
+    environment:
+      # KRaft 모드 핵심 설정
+      # 클러스터 내 브로커 식별 ID (유일해야 함)
+      KAFKA_NODE_ID: 1
+      # 노드가 해야하는 역할 정보: broker: 데이터 저장, controller: 관리 역할을 수행하도록 세팅한다.
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      # 컨트롤러 투표단 설정: 형식 ${KAFKA_NODE_ID}@{services.kafka}:{port} -> KAFKA_NODE_ID 1번인 kafka 서비스의 29093 포트 사용
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+
+      # 네트워크 및 리스너 설정
+      # 카프카가 어떤 포트에서 기다릴지 정의한다.
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093,EXTERNAL://0.0.0.0:9094'
+      # 광고용 리스너: 클라이언트에게 "나에게 오려면 이 주소로 와"라고 알려주는 명함 주소
+      # 보통 9094, 9092는 ui와 통신
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094'
+      # 각 리스너가 어떤 프로토콜을 사용할지 매핑하는 정보
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT'
+      # 컨트롤러 통신에 사용할 리스너 이름을 정의한다.
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      # 브로커끼리 통신할 때 사용할 리스너 이름을 정의한다.
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+
+      # 리소스 및 성능 최적화
+      # JVM 메모리 제한: 여기서는 로컬에 해당하는 정보를 세팅
+      # 테스트 및 상용에서는 최적화 필요
+      KAFKA_HEAP_OPTS: "-Xms512M -Xmx512M"
+      KAFKA_DELETE_TOPIC_ENABLE: 'true' # 테스트 중 토픽을 자유롭게 삭제할 수 있도록 허용
+      KAFKA_NUM_RECOVERY_THREADS_PER_DATA_DIR: 1 # 시작 시 데이터 복구 스레드 수 (로컬에선 1이면 충분)
+
+#      ######## 아래는 알려진 대용략 트래픽에 대한 통상적인 값이다. ##############
+#      # 하지만 답은 없다. 아마도 회사에서 운영하는 서비스의 시스템 메모리나 이런 부분을 보고 최적화 해야할 듯
+#      # 초기/최대 힙을 동일하게 설정하여 런타임시 메모리 할당 부하 방지
+#      KAFKA_HEAP_OPTS: "-Xms6G -Xmx6G"
+#      # 대용량 힙 관리에 효율적인 G1 Garbage Collector 사용
+#      KAFKA_JVM_PERFORMANCE_OPTS: "-XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35"
+#      # 처리량 최적화 스레드 설정
+#      # 네트워크 스레드: CPU 코어 수에 맞춰 조정
+#      KAFKA_NUM_NETWORK_THREADS: 8
+#      # I/O 스레드: 실제 디스크 읽기/쓰기를 수행 -> 보통 코어 수의 2배로 설정하는 것을 권장
+#      KAFKA_NUM_IO_THREADS: 16
+#      # 백그라운드 스레드: 로그 정리 및 기타 작업용
+#      KAFKA_BACKGROUND_THREADS: 4
+
+      # 데이터 정합성 및 복제 설정: 테스트용이라 한대만 사용
+      # 운영에서는 보통 레디스처럼 센티널 구성시에 홀수로 3 이상 권장하는 것과 비슷하다.
+      # 오프셋 저장용 토픽의 복제본 수
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      # 트랜잭션 최소 동기화 보장 수
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # 트랜잭션 로그 복제본 수
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      # 컨슈머 그룹 리밸런싱 대기 시간
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # 실수로 존재하지 않는 토픽에 쏴서 자동 생성되는 것 방지
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+
+
+      # 성능을 위한 커널/소켓 최적화
+      # 아래 값은 언제나 상황에 따라 변경 가능
+      # 100KB
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: 102400
+      # 100MB (한 번에 받을 수 있는 최대 요청 크기)
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: 104857600
+
+      # 로그 보관 및 디스크 관리
+      # 로컬 -> 메시지를 24시간만 보관
+      # 만일 권장하는 7일을 기준으로 한다면 168로 세팅
+      KAFKA_LOG_RETENTION_HOURS: 24
+      # 로그 파일 한 개당 크기를 100MB로 제한 (작게 쪼개서 관리)
+      # 1GB 단위로 한다면 1073741824
+      KAFKA_LOG_SEGMENT_BYTES: 104857600
+      # 로그 삭제 주기를 5분마다 체크
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+      KAFKA_LOG_CLEANUP_POLICY: 'delete'
+
+      # 클러스터 아이디
+      # 주키퍼와는 달리 KRaft 모드에서는 클러스터 구성을 할 때는 하나의 구성이라는 것을 묶는 클러스터 아이디가 필요하다.
+      # bin/kafka-storage.sh random-uuid -> 이런 식으로 생성해서 사용
+      CLUSTER_ID: 'Y29uZmx1ZW50LWthZmthLXJvY2tz'
+
+    # 컨테이너가 내려가도 데이터가 사라지지 않게 볼륨 연결
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    # 로그 파일 관리
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+    # 도커 수준에서의 리소스 제한
+    deploy:
+      resources:
+        limits:
+          # 힙(6G) + 페이지캐시용 여유분
+          memory: 12G
+    restart: always
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local-kraft
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    depends_on:
+      - kafka
+
+volumes:
+  kafka_data:
+    driver: local
