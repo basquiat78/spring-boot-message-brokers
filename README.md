@@ -888,4 +888,4 @@ app:
 
 # Next Step
 
-[Redis를 이용한 메세지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/02-with-redis)
+[Redis를 이용한 메시지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/02-with-redis)
