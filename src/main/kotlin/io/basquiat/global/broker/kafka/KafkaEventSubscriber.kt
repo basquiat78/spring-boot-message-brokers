@@ -1,5 +1,6 @@
 package io.basquiat.global.broker.kafka
 
+import io.basquiat.global.annotations.ConditionalOnKafka
 import io.basquiat.global.broker.common.MessageHandler
 import io.basquiat.global.utils.logger
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -15,6 +16,7 @@ import org.springframework.messaging.handler.annotation.Header
 import org.springframework.stereotype.Component
 
 @Component
+@ConditionalOnKafka
 class KafkaEventSubscriber(
     private val handlers: List<MessageHandler<*>>,
 ) {
@@ -72,6 +74,7 @@ class KafkaEventSubscriber(
         @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
         @Header(KafkaHeaders.OFFSET) offset: Long,
         @Header(KafkaHeaders.EXCEPTION_MESSAGE) errorMessage: String?,
+        ack: Acknowledgment,
     ) {
         log.error(
             """
@@ -85,5 +88,6 @@ class KafkaEventSubscriber(
         // TODO: 이후 어떻게 처리할 것인지
         // 1. 알림봇에 에러난 것을 푸시한다.
         // 2. 디비에 저장하고 차후 보상 로직 또는 스크립트로 처리할지 결정하자.
+        ack.acknowledge()
     }
 }

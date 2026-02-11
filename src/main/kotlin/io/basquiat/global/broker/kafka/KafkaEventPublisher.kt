@@ -1,11 +1,13 @@
 package io.basquiat.global.broker.kafka
 
+import io.basquiat.global.annotations.ConditionalOnKafka
 import io.basquiat.global.broker.common.MessagePublisher
 import io.basquiat.global.broker.common.code.BrokerChannel
 import io.basquiat.global.utils.logger
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Service
 
+@ConditionalOnKafka
 @Service("kafkaEventPublisher")
 class KafkaEventPublisher(
     private val kafkaTemplate: KafkaTemplate<String, Any>,

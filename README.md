@@ -423,6 +423,43 @@ org.springframework.kafka.listener.ListenerExecutionFailedException: Listener fa
 
 [kafka ui](http://localhost:8090/)에서도 바로 확인이 가능하다.
 
+
+# DLT 후처리
+
+내용을 보완하자면 지금 코드라면 DLT에 담긴 메시지는 서버가 뜨거나 할 때마다 실패한 메시지가 있다고 알려준다.
+
+그래서 다음과 같이
+
+
+```kotlin
+@DltHandler
+    fun handleDlt(
+        record: ConsumerRecord<String, Any>,
+        @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
+        @Header(KafkaHeaders.OFFSET) offset: Long,
+        @Header(KafkaHeaders.EXCEPTION_MESSAGE) errorMessage: String?,
+        ack: Acknowledgment,
+    ) {
+        log.error(
+            """
+            [DLT 인입] 최종 처리 실패
+            - 원본 토픽: $topic
+            - 오프셋: $offset
+            - 에러 메시지: $errorMessage
+            - 페이로드: ${record.value()}
+            """.trimIndent(),
+        )
+        // TODO: 이후 어떻게 처리할 것인지
+        // 1. 알림봇에 에러난 것을 푸시한다.
+        // 2. 디비에 저장하고 차후 보상 로직 또는 스크립트로 처리할지 결정하자.
+        ack.acknowledge()
+    }
+```
+확인했다고 `ack`를 날려준다.
+
+이런 DLT에 담겨진 메시지를 어떻게 처리할 것인지는 내부에서 결정하면 된다.
+디비에 위 정보를 담고 스케쥴등 다른 방법은 처리하는 방식이 일반적일 것이다.
+
 # Next Step
 
 [Nats를 이용한 메시지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/04-with-nats)

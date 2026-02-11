@@ -1,5 +1,6 @@
 package io.basquiat.global.configuration
 
+import io.basquiat.global.annotations.ConditionalOnKafka
 import org.springframework.boot.kafka.autoconfigure.ConcurrentKafkaListenerContainerFactoryConfigurer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -8,6 +9,7 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory
 import org.springframework.kafka.core.ConsumerFactory
 
 @Configuration
+@ConditionalOnKafka
 class KafkaConfig {
     @Bean
     fun kafkaListenerContainerFactory(
