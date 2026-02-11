@@ -1,6 +1,7 @@
 package io.basquiat.global.broker.common
 
 import io.basquiat.global.broker.common.code.BrokerChannel
+import io.basquiat.global.broker.nats.NatsEventPublisher
 import io.basquiat.global.broker.rabbitmq.RabbitMqEventPublisher
 
 interface MessagePublisher {
@@ -17,10 +18,11 @@ interface MessagePublisher {
 fun <T : Any> MessagePublisher.publish(
     channel: BrokerChannel,
     message: T,
-    delayMillis: Long?,
+    millis: Long?,
 ) {
     when (this) {
-        is RabbitMqEventPublisher -> this.publishWithDelay(channel, message, delayMillis)
+        is RabbitMqEventPublisher -> this.publishWithDelay(channel, message, millis)
+        is NatsEventPublisher -> this.publishWithTtl(channel, message, millis)
         else -> this.publish(channel, message)
     }
 }

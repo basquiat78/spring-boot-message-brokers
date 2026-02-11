@@ -31,8 +31,8 @@
     <logger name="io.basquiat" level="DEBUG"/>
     <logger name="org.hibernate.SQL" level="DEBUG"/>
     <logger name="org.hibernate.orm.jdbc.bind" level="TRACE"/>
-    <logger name="org.springframework.amqp" level="DEBUG"/>
-    <logger name="org.springframework.rabbit" level="DEBUG"/>
-    <logger name="org.apache.kafka" level="INFO" />
-    <logger name="org.springframework.kafka" level="INFO" />
+    <logger name="org.springframework.amqp" level="WARN"/>
+    <logger name="org.springframework.rabbit" level="WARN"/>
+    <logger name="org.apache.kafka" level="WARN" />
+    <logger name="org.springframework.kafka" level="WARN" />
 </configuration>

@@ -158,3 +158,8 @@ redisson:
   protocol: "redis://"
   # 상용이나 ssl을 적용해야 한다면
   # protocol: "rediss://"
+
+nats:
+  server: nats://localhost:4222
+  stream-name: BASQUIAT_STREAM
+  max-delivery: 3

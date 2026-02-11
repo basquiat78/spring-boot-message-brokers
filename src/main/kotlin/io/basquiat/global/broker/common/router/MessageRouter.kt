@@ -22,7 +22,7 @@ class MessageRouter(
                 BrokerType.RABBITMQ -> publishers["rabbitEventPublisher"]
                 BrokerType.REDIS -> publishers["redisEventPublisher"]
                 BrokerType.KAFKA -> publishers["kafkaEventPublisher"]
-                else -> null
+                BrokerType.NATS -> publishers["natsEventPublisher"]
             } ?: notSupportBrokers("지원하지 않는 브로커 타입입니다: $type")
 
         publisher.publish(channel, message, delayMillis)

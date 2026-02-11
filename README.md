@@ -1,464 +1,490 @@
-# Install Kafka
+# Install Nats
 
-여기서는 `Zookeeper`가 아닌 `KRaft`기반의 `Kafka`를 사용해 볼 생각이다.
+처음 써보는 메시지 브로커라 [NATS Docs](https://docs.nats.io/)에서 어떤 녀석인지 살펴봣다.
 
-```shell
-# 실행
-root>brokers>kafka> docker compose up -docker
+고랭으로 작성되어 있고 강력하고 단순하게 극강의 메시지 브로커라는 느낌이 좀 강하다.
 
-# 내린다면
-root>brokers>kafka> docker compose down -v
-```
+일단 도커 컴포즈로 똑같지 않을까 해서 찾아본 정보는 [How to set up nats with docker and docker compose with token](https://dev.to/shaikhalamin/how-to-set-up-nats-with-docker-and-docker-compose-with-token-2ddb) 이것을 참조했다.
 
-`docker-compose.yml`에는 `ui`도 설정했다.
+먼저 여기서 알려주는 방식은 `nats`에 대한 구성 파일을 따로 작성해서 구동하는 방식이다.
 
-실행이후 [kafka ui](http://localhost:8090/)
-
-주키퍼를 사용할 때는 카프카용 `ui`을 따로 썼던 기억이 나는데 아예 같이 제공한다.
-
-군더더기 없고 단순하며 깔끔하다.
-
-# About Kafka
-
-이게 최근에 대용량 트래픽 관련해서 언급되서 최근 기술로 알수 있지만 역사가 꽤 오래되었다.
-
-2010년에 `LinkedIn`에서 내부적으로 사용하기 위해 개발된 것이고 2011년에 아파치 재단에서 등록되면서 알려진 메시지 브로커로 작게 보면 그렇다.
-
-하지만 메시지 브로커 기능을 포함한 `분산 이벤트 스트리밍 플랫폼`이라고 보는게 맞을 것이다.
-
-문득 이런 생각이 들것이다.
+이게 전부일까 해서 `AI`를 비롯해서 여기저기 서칭해서 찾아낸 환경 구성 파일을 작성했다.
 
 ```text
-RabbitMQ랑 차이가 뭐야???
+# 실행
+root>brokers>nats> docker compose up -docker
+
+# 내린다면
+root>brokers>nats> docker compose down -v
 ```
 
-# 파티션 개념
+`nats.setup.conf`에 최대한 찾아보고 얻은 정보를 전부 셋업해서 주석으로 남겨둔다.
 
-데이터를 토픽으로 나누는 부분까지는 비슷해 보인다.
+이것도 `Redis`, `Kafka`처럼 클러스터 구성이 가능하다.
 
-하지만 카프카는 이 토픽을 여러 파티션에 분할을 한다.
+# About NATS
 
-쉽게 말하면 파티션은 로그로 순서대로 디스크에 기록이 되는 방식인데 이걸 카프카에서는 `append-only`로그라고 부른다.
+공식 홈을 보면 고성능, 경량, 오픈소스의 메시지 시스템으로 설계되어 있다고 못을 박아두고 있다.
 
-그러면 파티션 단위로 기록을 하냐는 의문이 들 수 있는데 이것은 확장을 위해서이다.
+그래서 지금까지 진행해오면서 경험한 다른 메시지 브로커들에서 보이는 개념들을 공유하고 있다.
 
-클러스터를 구성한다고 하면 파티션 단위로 클러스터내의 여러 브로커에 분산이 용이하고 이것은 복제도 마찬가이다.
+다만 `NATS`에는 눈여겨 볼 부분이 있다.
 
-그래서 클러스터를 통한 수평적인 확장이 쉬워진다는 개념이다.
+# nats-core
 
-`Consumer`쪽에 특징이 또 있다.
+앞서 `Redis`파트에서 `At-most-once`에 대해 언급한 적이 있다.
 
-`Consumer Group`이라 해서 같은 그룹내의 소비자들은 파티션 개념으로 파티션을 나눠서 읽어서 처리 가능하게 구현되었다.
-이에 대한 장점은 로드밸런싱, 장애 관련 문제를 처리하는데 특화되어 있다고 한다.
+`최대 한번 전달`이라는 개념은 `일단 메시지는 보냈어`이다.
 
-여기서 `offset`이라는 개념이 있는데 `Consumer Group`은 이 `offset`을 기준으로 데이터를 읽는다.
+이것은 컨슈머가 없거나 때마침 그때 컨슈머가 죽었다면 메시지를 폐기한다.
 
-이것은 `Consumer`측에서 어디까지 메시지를 읽고 소비했는지 알 수 있게 된다.
+그래서 `RabbitMQ`나 `Kafka`에서는 다시 컨슈머가 살거나 붙었을 때 `At-least-once` 방식으로 처리한다.
 
-# 메시지 보관
+물론 `Redis`파트에서도 `Streams`방식으로 이것을 구현할 수 있다.
 
-`docker-compose.yml`을 보면 `retention` 부분이 눈에 띈다. 
+`At-most-once`는 일단 보내고 컨슈머가 처리를 하든 메시지를 처리할 컨슈머가 없든 메시지를 폐기한다.
 
-디스크에 기록되는 데이터들은 이 정보를 기준으로 데이터를 보관하고 오래된 데이터를 삭제하는 기능을 가지고 있다.
+일명 `fire-and-forget`이다.
 
-단순하게 휘발성 메시지가 아니라는 의미인데 `Consumer`측에서 소비한 메시지를 삭제하는 구조가 아니고 로그에 기록하고 기능에 따라 삭제를 한다.
+장점은 뭘까?
 
-# 확장성
+속도일 것이다.
 
-파티션 개념으로 인해서 수평확장에 대한 언급을 했는데 이 파티션을 늘려서 브로커를 추가하면 무중단 운영이 가능하다고 한다.
+하지만 프로덕트 레벨에서 메시지 유실을 감수하는 경우가 있을까?
 
-뭐 이렇게 운영을 해 본 적이 없어서 몸으로 느껴보진 않았지만 많은 사례들이나 동료들의 이야기를 보면 이게 꽤 강력한가 보다.
+사실 이런 경우로 사용하는 케이스를 거의 보지 못해서 언급하기 어렵긴 하지만 정말 이런 경우가 생긴다면 경량으로 사용할 수 있다.
 
-# 이외의 장점들
+말 그대로 가장 간단한 방식이다.
 
-그 외에도 `Backpressure`가 가능하다.
+# jetStream
 
-뭐 백프레셔는 처리량을 조절하는 부분하는 부분이니 이 부분도 눈에 띄기도 한다.
+아마도 실서버에서는 `jetStream`을 활용할 가능성이 가장 크다고 본다.
 
-위에서 `offset`과 일정 기간 로그에 기록한다고 언급했는데 이런 기능으로 `Consumer`측에서 이 `offset`를 세팅해서 기록된 과거 데이터를 다시 읽고 처리가 가능하다.
+크게 `Stream`과 `Consumer`라는 두 가지의 개념으로 나눠진다.
 
-로그를 다시 분석하거나 할 때 유용하다고 하니 장점이라고 할 수 있을 것이다.
 
-또한 에코시스템이 잘 되어 있다고 한다.
+## Stream
 
-스트림 처리라든가 외부 시스템과의 연동등 장점들이 많은 것이 카프카이다!!
+`nats-core`는 메시지를 저장하거나 하지 않는다.
 
-# 자 그래서??
+하지만 여기서는 `Stream`이라는 저장소가 존재하며 토픽이라는 개념을 여기서는 `Subject`로 표현하는 거 같다.
 
-사실 이렇게 보면 카프카를 단순하게 `pub/sub`을 위해서 사용하는 것은 오버스펙이다.
+뭐 `주제`라고 하는데 여기서는 `.`을 활용해 계층적으로 설정이 가능하다.
 
-`RabbitMQ`나 그외 메시지 브로커들로도 충분히 커버가 가능하다는 의미이다.
+각 브로커마다 표현하는 개념은 달라도 `RabbitMQ`의 `Topic Exchange`와 상당히 유사한 부분이 있다.
 
-하지만 최소한 카프카를 어떻게 활용해야 하는지는 이 부분에서부터 시작한다고 할 수 있다.
+`Stream`을 저장소라고 표현했는데 그래서 서버가 죽거나 재시작할 때 옵션을 통해서 디스크에 저장을 하고 다시 불러 올 수 있기도 한다.
+당연히 이런 방식은 메시지를 보관하는 정책들도 같이 따라올 것이다.
 
-이를 통해서 이후 `Kafka Streams`나 실시간으로 데이터 스트림을 처리하기 위한 분산 처리 프레임워크인 아파치 `Flink`를 사용할 수 있지 않을까?
+`Redis`에도 이런 옵션들이 있다.
 
-이벤트 버스로 볼 수 있는 `pub/sub`을 기반으로 다양한 기능을 활용할 수 있는 플랫폼인 만큼 이정도는 알고 이후 아이디어를 얻을 수 있을 것이라 본다.
+## Consumer
 
-# 그레이들 세팅
+[NATS.io - Consumer Details](https://docs.nats.io/using-nats/developer/develop_jetstream/consumers)
+
+그렇다면 결국 `jetStream`은 여기 `Stream`에 메시지를 저장하고 컨슈머가 읽도록 하는 방식인데 `NATS`에서 말하는 `Consumer`는 약간 짬뽕느낌이 난다.
+
+1. Durable Consumer
+    어디까지 메시지를 읽었는지 서버에 저장을 하고 컨슈머가 이를 보고 이어서 읽을 수 있도록 한다.
+    -> `kafka`의 `offset`이랑 동일한 개념이라고 봐도 무방하지 않을까?
+
+2. Ephemeral Consumer
+    생소하긴 한데 임시적인 컨슈머라고 해야 하나?
+    일단 공홈의 설명대로라면 단일 인스턴스에 적합하며 컨슈머 클라이언트에 의해 자동으로 생성되고 연결이 끊기면 사라진다고 한다.
+
+## PUSH or PULL?
+
+`Redis`에서 스트림방식으로 처리한 것을 생각해 보면 `createGroup`과 컨슈머측에서 `readGroup`을 통해서 메시지를 가져오는 방식이었다.
+
+일종에 `Pull`방식이라는 것이다.
+
+일반적으로 우리가 생각하는 메시지 브로커는 대부분 `Push`방식이다.
+
+특히 실시간 데이터를 처리한다면 `Push`방식이 좋지만 `Backpressure`를 고민하지 않을 수 없다.
+
+예를 들면 메시지가 1000건씩 들어오는데 컨슈머가 900건만 처라할 수 있다면 100건을 처리하지 못하는 현상이 발생한다.
+
+그래서 `Backpressure` 전략을 고민해야 한다.
+
+`Kafka`는 아키텍쳐가 컨슈머가 플랫폼으로부터 데이터를 직접 댕겨오는 구조이다.
+
+컨슈머 클라이언트가 처리할 수 있는 만큼 땡겨와서 처리하면 `offset`관리 차원에서도 유연하다.
+
+`NATS`는 이 두가지 방식을 지원한다.
+
+만일 실시간으로 빠르게 처리를 해야 한다면 `Push`방식을 안정적인 처리가 필요하다면 `Pull` 방식으로 가져가면 좋다.
+
+다건의 데이터를 안정적으로 처리하는게 더 중요하게 생각하는 경향이 있기 때문에 많은 곳에서 `Pull` 방식을 선호하는 걸로 알고 있다!
+
+게다가 자바의 경우에는 최신 버전에서 `Virtual Thread`, 가상 스레드를 적극적으로 활용해서 이 방식으로 극대화 할 수 있는 것도 영향을 주지 않을까?
+
+# 일단 Pub/Sub
+
+그레이들의 다음과 같이 세팅을 한다.
 
 ```groovy
-implementation("org.springframework.boot:spring-boot-starter-kafka")
-// kafka-streams
-implementation("org.apache.kafka:kafka-streams")
+ implementation("io.nats:jnats:2.25.1")
 ```
 
-사실 지금같이 그냥 메시지를 주고 받고 무언가를 처리한다면 `kafka-streams`는 불필요하다.
-
-하지만 실시간으로 데이터를 처리해야 한다면 `Streams`방식을 고려해 봐야 한다.
-
-일단 저것도 같이 세팅을 하자.
-
-# 지금까지 한 방식으로 리스너 등록
-
-카프카 역시 래빗엠큐처럼 `@KafkListener`를 제공한다.
-
-하지만 카프카에서는 관련 애노테이션의 막강한 기능을 그대로 사용할 생각이다.
-
-일단 다음과 같이 `yaml`에 설정을 한다.
+스프링에서는 자체 지원이 없기 때문에 `NATS`와 통신하는 빈을 직접 만들어야 한다.
 
 ```yaml
-spring:
-  kafka:
-    bootstrap-servers: localhost:9094
-    listener:
-      # 수동 커밋 모드
-      ack-mode: manual_immediate
-      # 파티션 개수와 일치시켜 병렬성을 극대화
-      concurrency: 3
-      # 가상 스레드 환경에서는 폴링 대기 시간
-      poll-timeout: 3000ms
-    producer:
-      # 0: 브로커가 받았는지 확인조차 안 함 / 1: 리더 브로커만 저장하면 성공 간주 / all (-1): 리더 + 모든 복제본이 저장해야 성공 간주
-      acks: all
-      retries: 3
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      properties:
-        # 요청 대기 시간
-        request.timeout.ms: 30000
-        # 대기 시간
-        linger.ms: 10
-        # 전송에 걸리는 최대 시간 제한 (요청 대기 및 대기 시간보다 크게 잡아야 함)
-        delivery.timeout.ms: 120000
-        # 재시도 사이의 간격
-        retry.backoff.ms: 1000
-        # 가상 스레드 환경에서 처리량을 높이기 위한 배치 설정
-        batch.size: 32768
-        # 성능과 압축률의 최적 밸런스
-        compression.type: lz4
-        # 타입 정보를 신뢰할 수 없을 때의 폴백 로직
-        spring.json.add.type.headers: true
-        # 멱등성 프로듀서 활성화 (중복 전송 방지)
-        # acks를 all로 사용할 경우 묶어서 설정한다.
-        enable.idempotence: true
-        # 전송 순서 보장을 위한 최대 인플라이트 요청 수
-        max.in.flight.requests.per.connection: 5
-    consumer:
-      group-id: basquiat-group
-      # 오래된 메시지부터 순차적으로 읽을 것인지 (earliest)/ 됐고! 지금부터 들어오는 것을 읽을 것이지 (latest) 여부
-      auto-offset-reset: earliest
-      # 수동 ACK를 사용하기 위해 매뉴얼 모드 명시
-      enable-auto-commit: false
-      # 대량 처리시 유용, 단 이경우에는 메세지기 하나씩 오는게 아닌 리스트 형태로 오게 된다.
-      # 하지만 가상 스레드 환경에서 단건으로 처리하도록 주석 처리
-      # listener.type: batch
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-      properties:
-        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
-        # 직렬화 할때 해당 패키지의 dto는 믿을 수 있다는 것을 명시한다.
-        spring.json.trusted.packages: "io.basquiat.*"
-        # 타입 정보를 신뢰할 수 없을 때의 폴백 로직
-        spring.json.use.type.headers: true
-        # 가상 스레드 환경에서 리밸런싱 전략 최적화
-        # Stop-the-world 현상을 최소화 -> 진행하고 있는 것은 그대로, 남는 것을 나눠서
-        partition.assignment.strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor
-        # 가상 스레드 환경에서 세션 및 하트비트 설정
-        session.timeout.ms: 45000
-        max.poll.interval.ms: 300000
-        # 한 번의 poll로 가져올 최대 레코드 수
-        # 보통 가상 스레드 환경에서는 50에서 100개를 권장
-        max.poll.records: 50
+nats:
+  server: nats://localhost:4222
+  stream-name: BASQUIAT_STREAM
+  max-delivery: 3
 ```
 
-각각의 프로퍼티 정보에는 주석을 달아놨으니 해당 정보를 확인해 보는 것도 좋다.
+`yaml`에 설정을 추가한다.
+
+상용 서버를 염두해 두고 `NATS`관련 에러 모니터링을 위한 리스너를 먼저 설정해 보자.
 
 ```kotlin
-@Configuration
-class KafkaConfig {
-    @Bean
-    fun kafkaListenerContainerFactory(
-        configurer: ConcurrentKafkaListenerContainerFactoryConfigurer, // 스프링이 제공하는 설정 대리인
-        consumerFactory: ConsumerFactory<Any, Any>,
-    ): ConcurrentKafkaListenerContainerFactory<Any, Any> {
-        val factory = ConcurrentKafkaListenerContainerFactory<Any, Any>()
-        // yaml 설정 그대로 구성한다.
-        configurer.configure(factory, consumerFactory)
-        factory.containerProperties.listenerTaskExecutor =
-            SimpleAsyncTaskExecutor("kafka-virtual-threads-").apply {
-                setVirtualThreads(true)
+class NatsErrorListener : ErrorListener {
+    private val log = logger<NatsErrorListener>()
+
+    /**
+     * 서버 오류 발생 시 호출된다.
+     */
+    override fun errorOccurred(
+        conn: Connection?,
+        error: String?,
+    ) {
+        log.error("Error Occurred: $error")
+    }
+
+    /**
+     * 컨슈머의 처리 속도가 느려진다면 이 부분에 로그가 찍힌다.
+     */
+    override fun slowConsumerDetected(
+        conn: Connection?,
+        consumer: Consumer?,
+    ) {
+        val subject =
+            if (consumer is Subscription) {
+                consumer.subject
+            } else {
+                "Unknown Subject"
             }
-        return factory
+        log.warn(
+            """
+            Slow Consumer Detected:
+            - Subject: $subject
+            - Pending Messages: ${consumer?.pendingMessageCount} / ${consumer?.pendingMessageLimit}
+            - Pending Bytes: ${consumer?.pendingByteCount} / ${consumer?.pendingByteLimit}
+            - Dropped Messages: ${consumer?.droppedCount}
+            """.trimIndent(),
+        )
+    }
+
+    /**
+     * 클라이언트 컨슈머 장애 발생시
+     */
+    override fun exceptionOccurred(
+        conn: Connection?,
+        e: Exception?,
+    ) {
+        log.error("NATS 클라이언트 예외 발생: ${e?.message}", e)
+    }
+
+    /**
+     * jetStream을 위한 heartbeat 에러
+     */
+    override fun heartbeatAlarm(
+        conn: Connection?,
+        jetStreamSubscription: JetStreamSubscription?,
+        lastStreamSeq: Long,
+        lastConsumerSeq: Long,
+    ) {
+        log.warn("jetStream Heartbeat Alarm: check this Subject: ${jetStreamSubscription?.subject}")
     }
 }
 ```
 
-먼저 `kafkaListenerContainerFactory`를 작성한다.
+```kotlin
+@ConfigurationProperties(prefix = "nats")
+data class NatsProperties
+@ConstructorBinding
+constructor(
+    val server: String,
+    val streamName: String,
+)
 
-# Publisher
+@Configuration
+class NatsConfig(
+    private val props: NatsProperties,
+) {
+    private val log = logger<NatsConfig>()
+
+    @Bean
+    fun natsConnection(): Connection {
+        val options =
+            Options
+                .Builder()
+                .server(props.server)
+                .maxReconnects(-1)
+                .reconnectWait(Duration.ofSeconds(2))
+                .connectionListener { _, event -> log.info("NATS 연결 상태 변경: $event") }
+                .errorListener(NatsErrorListener())
+                .build()
+
+        return Nats.connect(options).also {
+            setupJetStream(it)
+        }
+    }
+
+    private fun setupJetStream(connection: Connection) {
+        val jsm = connection.jetStreamManagement()
+
+        val subjects = BrokerChannel.allChannelNames
+        val streamName = props.streamName
+
+        val streamConfig =
+            StreamConfiguration
+                .builder()
+                .name(streamName)
+                .subjects(subjects)
+                .storageType(StorageType.File)
+                //.replicas(3)
+                .maxAge(Duration.ofDays(7))
+                .maxMessages(100_000)
+                .maxBytes(1024 * 1024 * 1024)
+                .build()
+
+        try {
+            val streamNames = jsm.streamNames
+            if (!streamNames.contains(streamName)) {
+                jsm.addStream(streamConfig)
+                log.info("successfully NATS jetStream created: $streamName")
+            } else {
+                jsm.updateStream(streamConfig)
+                log.info("NATS jetStream config updated: $streamName")
+            }
+        } catch (e: Exception) {
+            log.error("jetStream 설정 중 오류 발생: ${e.message}")
+        }
+    }
+}
+```
+
+`setupJetStream`부분 코드를 보면 기존의 메시지 브로커의 경우에는 컨슈머측에서 채널별 (`NATS`에서는 `subject`)로 등록을 한다.
+
+하지만 여기서는 생성시에 주제를 미리 등록하는 방식이다.
+
+이것은 `jetStream`의 특징인데 `Stream`이라는 것을 저장소라고 표현을 했다.
+
+메시지 저장소의 역할을 하는데 미리 `subject`를 생성하지 않으면 메시지 발행시 컨슈머가 없다면 메시지를 폐기하게 된다.
+
+결국 위 코드는 다음과 같이 이해하면 된다.
+
+```text
++--------- jetStream (BASQUIAT_STREAM) --------+
+|   - subject: alarm.to.bog                    | 
+|   - subject: alarm.to.log                    | 
++----------------------------------------------+
+```
+이렇게 `BASQUIAT_STREAM`이라는 이름을 준 독립적인 `jetStream`의 메시지 보관소에 각 `subject`를 미리 생성해서 관리한다고 보면 된다.
+
+`replicas`는 클러스터 복제본 수를 세팅하는 부분이다.
+로컬에서는 한대만 띄우기 때문에 주석처리한다.
+
+또한 스트림에 메시지 보관 정책을 설정할 수 있다.
+
+`Kafka`처럼 일단 7일이 지나면 지우도록 설정 (`maxAge`)하고 메시지가 10만개가 넘어가면 오래된 메시지부터 삭제하도록 (`maxMessages`)한다.
+용량 기준으로 볼때 1GB가 넘어가면 삭제하도록 (`maxBytes`)를 일단 설정한다.
+
+# Producer
 
 ```kotlin
-Service("kafkaEventPublisher")
-class KafkaEventPublisher(
-    private val kafkaTemplate: KafkaTemplate<String, Any>,
+@Service("natsEventPublisher")
+class NatsEventPublisher(
+    private val natsConnection: Connection,
+    private val props: NatsProperties,
 ) : MessagePublisher {
-    private val log = logger<KafkaEventPublisher>()
+    private val log = logger<NatsEventPublisher>()
+
+    private val js: JetStream by lazy { natsConnection.jetStream() }
 
     override fun <T : Any> publish(
         channel: BrokerChannel,
         message: T,
     ) {
-        kafkaTemplate
-            .send(channel.channelName, message)
-            .thenAccept { result ->
-                val metadata = result.recordMetadata
-                log.info("[Kafka] 전송 성공: Topic=${metadata.topic()}, Offset=${metadata.offset()}")
+        // 내부적으로 ttl을 null을 넘겨서 공통 로직 처리
+        this.publishWithTtl(channel, message, null)
+    }
+
+    fun <T : Any> publishWithTtl(
+        channel: BrokerChannel,
+        message: T,
+        millis: Long?,
+    ) {
+        val jsonBytes = objectToByte(message)
+        val subject = channel.channelName
+
+        val pubOptionsBuilder =
+            PublishOptions
+                .builder()
+                .expectedStream(props.streamName)
+                .messageId(UUID.randomUUID().toString().substring(0, 8))
+
+        if (millis != null) pubOptionsBuilder.messageTtlSeconds(millis.toInt())
+
+        val pubOptions = pubOptionsBuilder.build()
+
+        js
+            .publishAsync(subject, jsonBytes, pubOptions)
+            .thenAccept { ack ->
+                if (ack.isDuplicate) log.info("[NATS 발행 완료] 채널: $subject, Stream: ${ack.stream}, Seq: ${ack.seqno}")
             }.exceptionally { ex ->
-                log.error("[Kafka] 전송 실패: ${ex.message}")
+                log.error("[NATS 발행 실패] 채널: $subject, 사유: ${ex.message}", ex)
                 null
             }
     }
 }
 ```
-`Redis`에서 작성한 방식과 상당히 유사하다.
+발행자 코드에서 확인해 볼 만한 부분은 `expectedStream`이다.
 
-이 부분은 특별한 부분이 없다.
+`jetStream`에서 구성에 따라서 여러개의 스트림, 즉 메시지 저장소가 존재할 수 있을텐데 메시지 저장소를 지정하는 부분이다. 
+
+`messageId`는 중복 메시지를 방지하기 위해서이다.
+
+하단에 `thenAccept`부분에 `ack.isDuplicate`라는 부분이 있는데 이미 보낸 메시지인데 `messageId`로 이미 존재한다면 로그를 통해 알려주도록 처리한다.
+
+`messageTtlSeconds`는 기본적으로 `messageTtl`의 확장 함수이다.
+
+이것은 위에서 우리가 `NatsConfig`를 생성할 때 `jetStream`의 설정값에서 유추해 볼 수 있다.
+
+만일 어떤 인증 정보를 메시지로 보낸다고 생각해 보자.
+
+`본인인증`을 예로 들면 인증 이후 특정 시간안에 인증을 하도록 한다.
+
+그리고 시간이 지나면 다시 하라고 요청을 할 것이다.
+
+이런 경우에는 각 발행한 메시지별로 `TTL`을 설정하는 것이다.
+
+기본적으로 7일이지만 여기에 이 정보를 세팅하게 된다면 그 시간만큼만 저장소에 머물었다가 삭제하게 된다.
+
+이와 관련 수정된 클래스인 `MessageRouter`, `MessagePublisher` 부분을 확인하자.
 
 # Consumer
 
 ```kotlin
 @Component
-class KafkaEventSubscriber(
+class NatsEventSubscriber(
+    private val natsConnection: Connection,
+    private val props: NatsProperties,
     private val handlers: List<MessageHandler<*>>,
 ) {
-    private val log = logger<KafkaEventSubscriber>()
+    private val log = logger<NatsEventSubscriber>()
 
-    private val handlerMap: Map<String, MessageHandler<*>> by lazy {
-        handlers.associateBy { it.channel.channelName }
-    }
-
-    companion object {
-        private val TOPIC_SUFFIX_REGEX = Regex("-retry-\\d+|-dlt$")
-    }
-
-    @RetryableTopic(
-        attempts = "3",
-        numPartitions = "3",
-        backOff = BackOff(delay = 2000, multiplier = 2.0),
-        topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE,
-        dltTopicSuffix = "-dlt",
-        dltStrategy = DltStrategy.ALWAYS_RETRY_ON_ERROR,
-    )
-    @KafkaListener(
-        // SpEL을 사용하여 BrokerChannel Enum에 정의된 모든 channelName을 구독 리스트로 확보
-        topics = ["#{T(io.basquiat.global.broker.common.code.BrokerChannel).values().![channelName]}"],
-        groupId = $$"${spring.kafka.consumer.group-id:basquiat-group}",
-    )
+    @PostConstruct
     @Suppress("UNCHECKED_CAST")
-    fun onMessage(
-        record: ConsumerRecord<String, Any>,
-        ack: Acknowledgment,
-    ) {
-        val payload = record.value()
-        val rawTopic = record.topic()
+    fun init() {
+        if (handlers.isEmpty()) return
+        val js = natsConnection.jetStream()
 
-        val originalTopic = rawTopic.replace(TOPIC_SUFFIX_REGEX, "")
-
-        handlerMap[originalTopic]?.let { handler ->
-            try {
-                (handler as MessageHandler<Any>).handle(payload)
-                ack.acknowledge()
-            } catch (e: Exception) {
-                log.error("[Kafka] 핸들러 실패 [Topic: $rawTopic]: ${e.message}")
-                // DLT로 보내도록
-                throw e
+        val dispatcher =
+            natsConnection.createDispatcher { msg ->
+                log.info("successfully create dispatcher: $msg")
             }
-        } ?: run {
-            log.warn("[Kafka] 매칭되는 핸들러 없음: $rawTopic (Original: $originalTopic)")
-            ack.acknowledge()
-        }
-    }
 
-    @DltHandler
-    fun handleDlt(
-        record: ConsumerRecord<String, Any>,
-        @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
-        @Header(KafkaHeaders.OFFSET) offset: Long,
-        @Header(KafkaHeaders.EXCEPTION_MESSAGE) errorMessage: String?,
-    ) {
-        log.error(
-            """
-            [DLT 인입] 최종 처리 실패
-            - 원본 토픽: $topic
-            - 오프셋: $offset
-            - 에러 메시지: $errorMessage
-            - 페이로드: ${record.value()}
-            """.trimIndent(),
-        )
-        // TODO: 이후 어떻게 처리할 것인지
-        // 1. 알림봇에 에러난 것을 푸시한다.
-        // 2. 디비에 저장하고 차후 보상 로직 또는 스크립트로 처리할지 결정하자.
+        handlers.forEach { handler ->
+            val channel = handler.channel
+            val subject = channel.channelName
+            val targetType = channel.type
+
+            val natsMessageHandler =
+                NatsMessageHandler { msg: Message ->
+                    try {
+                        val rawData = byteToObject(msg.data, Any::class.java)
+                        val finalMessage = convertMessage(rawData, targetType)
+                        (handler as MessageHandler<Any>).handle(finalMessage)
+                        msg.ack()
+                    } catch (e: Exception) {
+                        // 재시도한 횟수 가져온다.
+                        val deliveredCount = msg.metaData().deliveredCount()
+
+                        log.error("NATS 처리 실패 [$deliveredCount/3] [Subject: $subject]: ${e.message}")
+                        if (deliveredCount >= props.maxDelivery) {
+                            log.error("최대 재시도 횟수 초과. Subject: $subject")
+                            // TODO: DB에 남기거나 알림을 줘서 모니터링 할수 있도록 한다.
+                            // term()을 호출해서 해당 메시지는 재전송 그만하고 끝내도록 알려준다.
+                            msg.term()
+                        } else {
+                            // 아직 횟수에 도달하지 않았다면 다시 보내달라고 요청
+                            msg.nak()
+                        }
+                    }
+                }
+
+            val instanceId = UUID.randomUUID().toString().substring(0, 8)
+            val uniqueDurable = "${subject.replace(".", "_")}_$instanceId"
+
+            val consumerConfiguration =
+                ConsumerConfiguration
+                    .builder()
+                    .maxDeliver(props.maxDelivery)
+                    .ackWait(Duration.ofSeconds(30))
+                    .build()
+
+            val options =
+                PushSubscribeOptions
+                    .builder()
+                    .durable(uniqueDurable)
+                    .configuration(consumerConfiguration)
+                    .build()
+
+            js.subscribe(
+                subject,
+                dispatcher,
+                natsMessageHandler,
+                false,
+                options,
+            )
+            log.info("successfully NATS Fan-out subscriber: $subject (Durable: $uniqueDurable)")
+        }
     }
 }
 ```
+코드를 보면 이게 무엇인가 할 것이다.
 
-`BrokerChanel`에 등록된 모든 채널 정보를 리스너 애노테이션을 통해 받도록 한다.
+일단 `jetStream`에서 `durable`은 `Consumer Group`처럼 보이게 한다.
 
-그리고 미리 메모리에 채널에 등록된 핸들러를 `Map`형식으로 받아놓고 토픽에 맞는 핸들러를 찾아서 컨슈머를 하도록 설정한다.
+`jetStream`입장에서는 같은 `subject`를 구독하고 있는 컨슈머들이거 같은데 `durable`이 같다면 같은 `Consumer Group`으로 본다.
+이렇게 되면 `at-least-once`처럼 작동한다.
 
-여기서 독특한 부분이 몇가지가 있는데 `@RetryableTopic`, `@DltHandler`부분이다.
+따라서 여러 컨슈머들이 동시에 처리하는게 아니라 먼저 컨슈머들이 순차적으로 들어온 메시지를 처리하기 때문에 중복 작업을 하지 않는다.
 
-`Kafka`는 컨슈머측에서 어떤 이유로 에러가 나거나 할때 재시도 처리를 할 수 있는데 이것을 `@RetryableTopic`을 통해 설정할 수 있다.
+하지만 같은 `subject`를 구독하지만 이 값이 다르면 서로 독립된 `Consumer Group`이라고 인식하게 된다.
 
-여기서 각각의 옵션 정보는 다음과 같다.
+`RabbitMQ`의 `Fanout Exchange`처럼 작동하게 되어 모든 컨슈머에게 메시지를 전부 발행하게 된다.
 
-- attempts: 재시도
-- numPartitions: 파티션 갯수
-- backOff: 2초 단위로 재시도를 하는데, 재시도 할때마다 2.0를 곱해서 2 -> 4 초 로 딜레이를 주고 재시도한다.
-- 이유는 빨리 요청을 하면 장애를 일으킬 수 있기 때문에 잠시 쉬어가도록
-- topicSuffixingStrategy: 재시도시에는 토픽을 생성하게 되는데 이때 토픽명에 대한 전략이다.
-- 이 전략은 예를 들면 alarm.to.bot-retry-0 이런 패턴으로 생성한다.
-- ui에서 이 토픽을 통해 모니터링을 수월하게 할 수 있다.
-- dltTopicSuffix: dlt, 일명 보관함에 쌓일때 토픽 생성시 접미사 패턴
-- dltStrategy: dlt로 메시지를 보낼 때 조차 에러가 발생할 때의 전략 방식
-- 현재 세팅은 극강의 메시지 유실을 하지 않도록 성공할때까지 처리하도록 설정
+여기까지가 가장 기본적인 `pub/sub` 로직이다.
 
-
-이 컨슈머의 전체 흐름은 다음과 같다.
-
-1. 수신을 하다 에러가 발생
-2. 총 3번의 재시도 시도 (xxx-retry-0, xxx-retry-1, xxx-retry-2)
-3. 재시도를 3번 했는데도 에러가 난다면 보관함 dtl로 보낸다
-
-# 테스트를 해보자
-
-```kotlin
-@SpringBootTest
-@ActiveProfiles("local")
-@TestPropertySource(locations = ["classpath:application-local.yaml"])
-@Suppress("NonAsciiCharacters")
-class KafkaPubSubTest
-    @Autowired
-    constructor(
-        private val messageRouter: MessageRouter,
-    ) {
-        @Test
-        fun `Kafka를 통한 publish, consume 테스트`() {
-            // given
-            val alarmToBotMessage = AlarmToBot(message = "봇으로 알람 보내기")
-            val alarmToLogMessage = AlarmToLog(message = "로그 봇으로 알람 보내기", extra = "extra data")
-
-            // when
-            messageRouter.send(BrokerChannel.ALARM_TO_BOT, BrokerType.KAFKA, alarmToBotMessage)
-            messageRouter.send(BrokerChannel.ALARM_TO_LOG, BrokerType.KAFKA, alarmToLogMessage)
-
-            // then: 로그를 위해 시간을 잡는다
-            Thread.sleep(1000)
-        }
-    }
-```
-
-지금 실행하게 되면 현재 로그가 어마어마하게 뜰 것이다.
-
-`Kafka`는 애노테이션에 정의된 정보를 보고 미리 재시도 관련 토픽과 dlt 토픽을 생성한다.
-
-실제로는 원래 토픽인 `alarm.to.log`, `alarm.to.bot`을 보면 메시지를 받은 숫자와 받은 메시지의 사이즈 정보가 뜨는 것을 확인 할 수 있다.
-
-# 재시도 이후 dlt 토픽으로 넘어가는 테스트
+# 테스트
 
 ```kotlin
 @Test
-fun `Kafka 메시지 처리 실패 시 재시도 및 최종 DLT 이동 검증`() {
-    // given: Mockito를 사용하여 해당 핸들러 호출 시 무조건 에러 발생 설정하자
-    doThrow(RuntimeException("테스트용 강제 에러"))
-        .`when`(alarmToLogHandler)
-        .handle(any())
+fun `NATS를 통한 fan-out, push 방식의 publish, consume 테스트`() {
+    // given
+    val alarmToBotMessage = AlarmToBot(message = "봇으로 알람 보내기")
+    val alarmToLogMessage = AlarmToLog(message = "로그 봇으로 알람 보내기", extra = "extra data")
 
-    val alarmToLogMessage = AlarmToLog(message = "재시도 테스트 메시지", extra = "extra data")
-
-    // when: Kafka 채널로 메시지 전송
-    messageRouter.send(BrokerChannel.ALARM_TO_LOG, BrokerType.KAFKA, alarmToLogMessage)
+    // when
+    messageRouter.send(BrokerChannel.ALARM_TO_BOT, BrokerType.NATS, alarmToBotMessage)
+    messageRouter.send(BrokerChannel.ALARM_TO_LOG, BrokerType.NATS, alarmToLogMessage)
 
     // then: 로그를 위해 시간을 잡는다
-    Thread.sleep(10000)
-
-    // 3번의 재시도이니 재시도 횟수 검증
-    verify(alarmToLogHandler, times(3)).handle(any())
+    Thread.sleep(1000)
 }
 ```
-다음과 같이 에러를 강제로 발생시켜 3번의 재시도 및 최종적으로 dlt로 넘어가는지 확인해 보는 테스트를 거쳐보자.
+메시지를 전송하고 수신하는 로그를 확인해 보면 잘 가는 것을 볼 수 있다.
 
-```text
-2026-02-10T18:58:49.214+09:00  INFO 50063 --- [message-brokers-server] [rver-producer-1] i.b.g.broker.kafka.KafkaEventPublisher   : [Kafka] 전송 성공: Topic=alarm.to.log, Offset=1
-2026-02-10T18:58:49.244+09:00 ERROR 50063 --- [message-brokers-server] [tual-threads-10] i.b.g.broker.kafka.KafkaEventSubscriber  : [Kafka] 핸들러 실패 [Topic: alarm.to.log]: 테스트용 강제 에러
-2026-02-10T18:58:49.792+09:00  INFO 50063 --- [message-brokers-server] [rtual-threads-7] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-basquiat-group-retry-0-7, groupId=basquiat-group-retry-0] Seeking to offset 0 for partition alarm.to.log-retry-0-0
-2026-02-10T18:58:49.792+09:00  INFO 50063 --- [message-brokers-server] [rtual-threads-7] o.s.k.l.KafkaMessageListenerContainer    : Record in retry and not yet recovered
-2026-02-10T18:58:51.352+09:00 ERROR 50063 --- [message-brokers-server] [rtual-threads-7] i.b.g.broker.kafka.KafkaEventSubscriber  : [Kafka] 핸들러 실패 [Topic: alarm.to.log-retry-0]: 테스트용 강제 에러
-2026-02-10T18:58:51.883+09:00  INFO 50063 --- [message-brokers-server] [rtual-threads-4] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-basquiat-group-retry-1-4, groupId=basquiat-group-retry-1] Seeking to offset 0 for partition alarm.to.log-retry-1-0
-2026-02-10T18:58:51.884+09:00  INFO 50063 --- [message-brokers-server] [rtual-threads-4] o.s.k.l.KafkaMessageListenerContainer    : Record in retry and not yet recovered
-2026-02-10T18:58:55.428+09:00 ERROR 50063 --- [message-brokers-server] [rtual-threads-4] i.b.g.broker.kafka.KafkaEventSubscriber  : [Kafka] 핸들러 실패 [Topic: alarm.to.log-retry-1]: 테스트용 강제 에러
-2026-02-10T18:58:55.430+09:00 ERROR 50063 --- [message-brokers-server] [rtual-threads-4] k.r.DeadLetterPublishingRecovererFactory : Record: topic = alarm.to.log-retry-1, partition = 0, offset = 0, main topic = alarm.to.log threw an error at topic alarm.to.log-retry-1 and won't be retried. Sending to DLT with name alarm.to.log-dlt.
+# PUSH에서 PULL 방식으로
 
-org.springframework.kafka.listener.ListenerExecutionFailedException: Listener failed...
-
-2026-02-10T18:58:55.955+09:00 ERROR 50063 --- [message-brokers-server] [rtual-threads-1] i.b.g.broker.kafka.KafkaEventSubscriber  : [DLT 인입] 최종 처리 실패
-- 원본 토픽: alarm.to.log-dlt
-- 오프셋: 0
-- 에러 메시지: Listener failed; 테스트용 강제 에러
-- 페이로드: AlarmToLog(message=재시도 테스트 메시지, extra=extra data)
-```
-
-로그를 보면 전송이 성공한 이후 처음 에러가 나고 2번의 재시도를 통해 최종 3번의 시도를 하고 결국 dlt로 빠지는 것을 볼 수 있다.
-
-[kafka ui](http://localhost:8090/)에서도 바로 확인이 가능하다.
+코드를 보면 마지막 구독을 하는 코드에 넘기는 `options`정보를 보면
 
 
-# DLT 후처리
-
-내용을 보완하자면 지금 코드라면 DLT에 담긴 메시지는 서버가 뜨거나 할 때마다 실패한 메시지가 있다고 알려준다.
-
-그래서 다음과 같이
-
-
-```kotlin
-@DltHandler
-    fun handleDlt(
-        record: ConsumerRecord<String, Any>,
-        @Header(KafkaHeaders.RECEIVED_TOPIC) topic: String,
-        @Header(KafkaHeaders.OFFSET) offset: Long,
-        @Header(KafkaHeaders.EXCEPTION_MESSAGE) errorMessage: String?,
-        ack: Acknowledgment,
-    ) {
-        log.error(
-            """
-            [DLT 인입] 최종 처리 실패
-            - 원본 토픽: $topic
-            - 오프셋: $offset
-            - 에러 메시지: $errorMessage
-            - 페이로드: ${record.value()}
-            """.trimIndent(),
-        )
-        // TODO: 이후 어떻게 처리할 것인지
-        // 1. 알림봇에 에러난 것을 푸시한다.
-        // 2. 디비에 저장하고 차후 보상 로직 또는 스크립트로 처리할지 결정하자.
-        ack.acknowledge()
-    }
-```
-확인했다고 `ack`를 날려준다.
-
-이런 DLT에 담겨진 메시지를 어떻게 처리할 것인지는 내부에서 결정하면 된다.
-디비에 위 정보를 담고 스케쥴등 다른 방법은 처리하는 방식이 일반적일 것이다.
 
 # Next Step
 

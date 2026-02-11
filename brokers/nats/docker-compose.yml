@@ -1,0 +1,30 @@
+services:
+  nats:
+    # 작성 시간 기준으로 nats:2.12.3
+    # 하지만 상용에서는 버전을 명시하는 것을 추천
+    image: nats:latest
+    container_name: nats-server
+    ports:
+      - "4222:4222" # client port
+      - "6222:6222" # cluster port (after exposed)
+      - "8222:8222" # http monitoring port
+    command: [ "--config", "/config/nats-1.setup.conf" ]
+    volumes:
+      - ./nats-1.setup.conf:/config/nats-1.setup.conf:ro
+      - nats-data:/data # JetStream data persistence
+    networks:
+      - nats-networks
+    # 메모리 한계 명시
+    deploy:
+      resources:
+        limits:
+          memory: 12G
+    restart: unless-stopped
+
+volumes:
+  nats-data:
+    driver: local
+
+networks:
+  nats-networks:
+    driver: bridge
