@@ -39,7 +39,7 @@ class NatsEventPublisher(
         val pubOptionsBuilder =
             PublishOptions
                 .builder()
-                .expectedStream(props.streamName)
+                .expectedStream(props.apiStreamName)
                 .messageId(UUID.randomUUID().toString().substring(0, 8))
 
         if (millis != null) pubOptionsBuilder.messageTtlSeconds(millis.toInt())

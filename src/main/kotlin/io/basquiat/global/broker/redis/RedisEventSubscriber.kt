@@ -74,17 +74,17 @@ class RedisEventSubscriber(
                     }
                 } catch (e: Exception) {
                     if (e is InterruptedException || Thread.currentThread().isInterrupted) {
-                        log.info("Polling interrupted, stopping...")
-                        return@execute
+                        log.info("Redis Polling interrupted, stopping gracefully...")
+                        Thread.currentThread().interrupt()
+                        break
                     }
 
                     log.error("Stream polling error: ${e.message}. Retrying in 2s...")
-                    // Backoff를 통해 무한 루프 방지
                     try {
                         Thread.sleep(2000)
                     } catch (_: InterruptedException) {
                         Thread.currentThread().interrupt()
-                        return@execute
+                        break
                     }
                 }
             }

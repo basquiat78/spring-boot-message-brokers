@@ -59,10 +59,10 @@ dependencies {
     runtimeOnly("org.postgresql:postgresql")
 
     // 보안 문제로 해당 maven을 사용하도록 한다.
-    implementation("io.github.openfeign.querydsl:querydsl-jpa:5.6.1")
+    implementation("io.github.openfeign.querydsl:querydsl-jpa:5.6.1:jakarta")
     kapt("io.github.openfeign.querydsl:querydsl-apt:5.6.1:jakarta")
-    kapt("jakarta.annotation:jakarta.annotation-api")
     kapt("jakarta.persistence:jakarta.persistence-api")
+    kapt("jakarta.annotation:jakarta.annotation-api")
     kapt("org.springframework.boot:spring-boot-configuration-processor")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -71,6 +71,31 @@ dependencies {
     testImplementation("org.mockito.kotlin:mockito-kotlin:6.2.3")
     testImplementation("org.springframework.boot:spring-boot-starter-test") {
         exclude(module = "junit-vintage-engine")
+    }
+}
+kotlin {
+    sourceSets.main {
+        kotlin.srcDir("build/generated/source/kapt/main")
+    }
+}
+
+kapt {
+    keepJavacAnnotationProcessors = true
+    correctErrorTypes = true // 이 설정이 누락되면 Delegate 메서드 생성이 무시될 수 있음
+    arguments {
+        arg("querydsl.entityAccessors", "true")
+    }
+}
+
+val querydslDir =
+    layout.buildDirectory
+        .dir("generated/source/kapt/main")
+        .get()
+        .asFile!!
+
+sourceSets {
+    getByName("main") {
+        java.srcDirs(querydslDir)
     }
 }
 

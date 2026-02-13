@@ -8,6 +8,9 @@ data class NatsProperties
     @ConstructorBinding
     constructor(
         val server: String,
-        val streamName: String,
+        val apiStreamName: String,
+        val apiAllowSubject: String,
+        val apiHeader: String,
         val maxDelivery: Long,
+        val durableSuffix: String,
     )

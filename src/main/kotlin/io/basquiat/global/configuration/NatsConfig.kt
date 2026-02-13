@@ -40,13 +40,15 @@ class NatsConfig(
         val jsm = connection.jetStreamManagement()
 
         val subjects = BrokerChannel.allChannelNames
-        val streamName = props.streamName
+        val streamName = props.apiStreamName
+        val allowSubjects = props.apiAllowSubject
 
         val streamConfig =
             StreamConfiguration
                 .builder()
                 .name(streamName)
-                .subjects(subjects)
+                .subjects(allowSubjects)
+                .allowMessageTtl(true)
                 .storageType(StorageType.File)
                 // .replicas(3)
                 .maxAge(Duration.ofDays(7))

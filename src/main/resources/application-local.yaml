@@ -161,5 +161,8 @@ redisson:
 
 nats:
   server: nats://localhost:4222
-  stream-name: BASQUIAT_STREAM
+  api-stream-name: BASQUIAT_API_STREAM
+  api-header: API_REPLY_TO
   max-delivery: 3
+  durable-suffix: _group
+  api-allow-subject: "basquiat.>"

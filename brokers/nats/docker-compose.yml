@@ -8,9 +8,9 @@ services:
       - "4222:4222" # client port
       - "6222:6222" # cluster port (after exposed)
       - "8222:8222" # http monitoring port
-    command: [ "--config", "/config/nats-1.setup.conf" ]
+    command: [ "--config", "/config/nats.conf" ]
     volumes:
-      - ./nats-1.setup.conf:/config/nats-1.setup.conf:ro
+      - ./nats.conf:/config/nats.conf:ro
       - nats-data:/data # JetStream data persistence
     networks:
       - nats-networks
@@ -21,9 +21,24 @@ services:
           memory: 12G
     restart: unless-stopped
 
+  nats-ui:
+    image: ghcr.io/nats-nui/nui:edge    # ← 실제 존재하는 NATS UI 이미지[web:451][web:452]
+    container_name: nats-ui
+    ports:
+      - "31311:31311"                  # Nui 기본 포트
+    volumes:
+      - ./nui-db:/db                   # 선택: UI용 내부 DB 영속화
+    depends_on:
+      - nats
+    networks:
+      - nats-networks
+    environment:
+      - NATS_URL=nats://nats-server:4222
+
 volumes:
   nats-data:
     driver: local
+  nui-db:
 
 networks:
   nats-networks:

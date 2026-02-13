@@ -11,8 +11,8 @@ enum class BrokerChannel(
     val channelName: String,
     val type: Class<*>,
 ) {
-    ALARM_TO_BOT("alarm.to.bot", AlarmToBot::class.java),
-    ALARM_TO_LOG("alarm.to.log", AlarmToLog::class.java),
+    ALARM_TO_BOT("basquiat.alarm.to.bot", AlarmToBot::class.java),
+    ALARM_TO_LOG("basquiat.alarm.to.log", AlarmToLog::class.java),
     ;
 
     companion object {

@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.TestPropertySource
+import java.time.LocalDateTime
 
 @SpringBootTest
 @ActiveProfiles("local")
@@ -23,14 +24,27 @@ class NatsPubSubTest
         private val natsConnection: Connection,
     ) {
         @Test
-        fun `NATS를 통한 fan-out, push 방식의 publish, consume 테스트`() {
+        fun `NATS를 통한 publish, consume 테스트`() {
             // given
             val alarmToBotMessage = AlarmToBot(message = "봇으로 알람 보내기")
             val alarmToLogMessage = AlarmToLog(message = "로그 봇으로 알람 보내기", extra = "extra data")
-
+            println("메세지를 보낸 시점 : ${LocalDateTime.now()}")
             // when
             messageRouter.send(BrokerChannel.ALARM_TO_BOT, BrokerType.NATS, alarmToBotMessage)
             messageRouter.send(BrokerChannel.ALARM_TO_LOG, BrokerType.NATS, alarmToLogMessage)
+
+            // then: 로그를 위해 시간을 잡는다
+            Thread.sleep(1000)
+        }
+
+        @Test
+        fun `NATS를 통한 ttl publish, consume 테스트`() {
+            // given
+            val alarmToBotMessage = AlarmToBot(message = "봇으로 알람 보내기")
+            val alarmToLogMessage = AlarmToLog(message = "로그 봇으로 알람 보내기", extra = "extra data")
+            // when
+            messageRouter.send(BrokerChannel.ALARM_TO_BOT, BrokerType.NATS, alarmToBotMessage, 60)
+            messageRouter.send(BrokerChannel.ALARM_TO_LOG, BrokerType.NATS, alarmToLogMessage, 60)
 
             // then: 로그를 위해 시간을 잡는다
             Thread.sleep(1000)
