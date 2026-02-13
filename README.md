@@ -122,6 +122,6 @@ spring:
 [Redis를 이용한 메시지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/02-with-redis)   
 [Kafka를 이용한 메시지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/03-with-kafka)   
 [Nats를 이용한 메시지 큐 브랜치](https://github.com/basquiat78/spring-boot-message-brokers/tree/04-with-nats)  
+[번외 - Redis를 이용한 분삭락 전략](https://github.com/basquiat78/spring-boot-message-brokers/tree/05-with-distributed-lock)   
 [번외 - Redis를 이용한 캐쉬 전략]()   
-[번외 - Redis를 분삭락 전략]()   
 [번외 - Kafka Streams]()
