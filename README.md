@@ -1635,4 +1635,4 @@ abstract class AbstractResponder<T>(
 
 그래서 다음 브랜치는 기존에 설정한 `Redis`를 통해 분산락을 적용할 생각이다.
 
-[번외 - Redis를 이용한 분삭락 전략](https://github.com/basquiat78/spring-boot-message-brokers/tree/04-with-distributed-lock)
+[번외 - Redis를 이용한 분삭락 전략](https://github.com/basquiat78/spring-boot-message-brokers/tree/05-with-distributed-lock)
