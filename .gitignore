@@ -4,3 +4,4 @@
 /logs/
 /.gradle/
 /.kotlin/
+/brokers/nats/nui-db/

@@ -400,19 +400,19 @@ fun `Kafka 메시지 처리 실패 시 재시도 및 최종 DLT 이동 검증`()
 다음과 같이 에러를 강제로 발생시켜 3번의 재시도 및 최종적으로 dlt로 넘어가는지 확인해 보는 테스트를 거쳐보자.
 
 ```text
-2026-02-10T18:58:49.214+09:00  INFO 50063 --- [message-brokers-server] [rver-producer-1] i.b.g.broker.kafka.KafkaEventPublisher   : [Kafka] 전송 성공: Topic=alarm.to.log, Offset=1
-2026-02-10T18:58:49.244+09:00 ERROR 50063 --- [message-brokers-server] [tual-threads-10] i.b.g.broker.kafka.KafkaEventSubscriber  : [Kafka] 핸들러 실패 [Topic: alarm.to.log]: 테스트용 강제 에러
-2026-02-10T18:58:49.792+09:00  INFO 50063 --- [message-brokers-server] [rtual-threads-7] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-basquiat-group-retry-0-7, groupId=basquiat-group-retry-0] Seeking to offset 0 for partition alarm.to.log-retry-0-0
-2026-02-10T18:58:49.792+09:00  INFO 50063 --- [message-brokers-server] [rtual-threads-7] o.s.k.l.KafkaMessageListenerContainer    : Record in retry and not yet recovered
-2026-02-10T18:58:51.352+09:00 ERROR 50063 --- [message-brokers-server] [rtual-threads-7] i.b.g.broker.kafka.KafkaEventSubscriber  : [Kafka] 핸들러 실패 [Topic: alarm.to.log-retry-0]: 테스트용 강제 에러
-2026-02-10T18:58:51.883+09:00  INFO 50063 --- [message-brokers-server] [rtual-threads-4] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-basquiat-group-retry-1-4, groupId=basquiat-group-retry-1] Seeking to offset 0 for partition alarm.to.log-retry-1-0
-2026-02-10T18:58:51.884+09:00  INFO 50063 --- [message-brokers-server] [rtual-threads-4] o.s.k.l.KafkaMessageListenerContainer    : Record in retry and not yet recovered
-2026-02-10T18:58:55.428+09:00 ERROR 50063 --- [message-brokers-server] [rtual-threads-4] i.b.g.broker.kafka.KafkaEventSubscriber  : [Kafka] 핸들러 실패 [Topic: alarm.to.log-retry-1]: 테스트용 강제 에러
-2026-02-10T18:58:55.430+09:00 ERROR 50063 --- [message-brokers-server] [rtual-threads-4] k.r.DeadLetterPublishingRecovererFactory : Record: topic = alarm.to.log-retry-1, partition = 0, offset = 0, main topic = alarm.to.log threw an error at topic alarm.to.log-retry-1 and won't be retried. Sending to DLT with name alarm.to.log-dlt.
+INFO 50063 --- [message-brokers-server] [rver-producer-1] i.b.g.broker.kafka.KafkaEventPublisher   : [Kafka] 전송 성공: Topic=alarm.to.log, Offset=1
+ERROR 50063 --- [message-brokers-server] [tual-threads-10] i.b.g.broker.kafka.KafkaEventSubscriber  : [Kafka] 핸들러 실패 [Topic: alarm.to.log]: 테스트용 강제 에러
+INFO 50063 --- [message-brokers-server] [rtual-threads-7] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-basquiat-group-retry-0-7, groupId=basquiat-group-retry-0] Seeking to offset 0 for partition alarm.to.log-retry-0-0
+INFO 50063 --- [message-brokers-server] [rtual-threads-7] o.s.k.l.KafkaMessageListenerContainer    : Record in retry and not yet recovered
+ERROR 50063 --- [message-brokers-server] [rtual-threads-7] i.b.g.broker.kafka.KafkaEventSubscriber  : [Kafka] 핸들러 실패 [Topic: alarm.to.log-retry-0]: 테스트용 강제 에러
+INFO 50063 --- [message-brokers-server] [rtual-threads-4] o.a.k.c.c.i.ClassicKafkaConsumer         : [Consumer clientId=consumer-basquiat-group-retry-1-4, groupId=basquiat-group-retry-1] Seeking to offset 0 for partition alarm.to.log-retry-1-0
+INFO 50063 --- [message-brokers-server] [rtual-threads-4] o.s.k.l.KafkaMessageListenerContainer    : Record in retry and not yet recovered
+ERROR 50063 --- [message-brokers-server] [rtual-threads-4] i.b.g.broker.kafka.KafkaEventSubscriber  : [Kafka] 핸들러 실패 [Topic: alarm.to.log-retry-1]: 테스트용 강제 에러
+ERROR 50063 --- [message-brokers-server] [rtual-threads-4] k.r.DeadLetterPublishingRecovererFactory : Record: topic = alarm.to.log-retry-1, partition = 0, offset = 0, main topic = alarm.to.log threw an error at topic alarm.to.log-retry-1 and won't be retried. Sending to DLT with name alarm.to.log-dlt.
 
 org.springframework.kafka.listener.ListenerExecutionFailedException: Listener failed...
 
-2026-02-10T18:58:55.955+09:00 ERROR 50063 --- [message-brokers-server] [rtual-threads-1] i.b.g.broker.kafka.KafkaEventSubscriber  : [DLT 인입] 최종 처리 실패
+ERROR 50063 --- [message-brokers-server] [rtual-threads-1] i.b.g.broker.kafka.KafkaEventSubscriber  : [DLT 인입] 최종 처리 실패
 - 원본 토픽: alarm.to.log-dlt
 - 오프셋: 0
 - 에러 메시지: Listener failed; 테스트용 강제 에러
