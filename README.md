@@ -260,10 +260,10 @@ fun `REDIS를 통한 publish, consume 테스트`() {
 
 
 ```text
-2026-02-09T18:24:08.516+09:00  INFO 45379 --- [message-brokers-server] [  redisson-3-14] i.b.g.b.c.handler.AlarmToLogHandler      : 로그로 보내는 알람 메세지 정보: AlarmToLog(message=로그 봇으로 알람 보내기 from Redis, extra=null)
-2026-02-09T18:24:08.516+09:00  INFO 45379 --- [message-brokers-server] [  redisson-3-13] i.b.g.b.c.handler.AlarmToBotHandler      : 봇으로 보내는 알람 메세지 정보: AlarmToBot(message=봇으로 알람 보내기 from Redis)
-2026-02-09T18:24:08.519+09:00  INFO 45379 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.c.handler.AlarmToBotHandler      : 봇으로 보내는 알람 메세지 정보: AlarmToBot(message=봇으로 알람 보내기 from RabbitMQ)
-2026-02-09T18:24:08.526+09:00  INFO 45379 --- [message-brokers-server] [pool-2-thread-6] i.b.g.b.c.handler.AlarmToLogHandler      : 로그로 보내는 알람 메세지 정보: AlarmToLog(message=로그 봇으로 알람 보내기 from RabbitMQ, extra=null)
+INFO 45379 --- [message-brokers-server] [  redisson-3-14] i.b.g.b.c.handler.AlarmToLogHandler      : 로그로 보내는 알람 메세지 정보: AlarmToLog(message=로그 봇으로 알람 보내기 from Redis, extra=null)
+INFO 45379 --- [message-brokers-server] [  redisson-3-13] i.b.g.b.c.handler.AlarmToBotHandler      : 봇으로 보내는 알람 메세지 정보: AlarmToBot(message=봇으로 알람 보내기 from Redis)
+INFO 45379 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.c.handler.AlarmToBotHandler      : 봇으로 보내는 알람 메세지 정보: AlarmToBot(message=봇으로 알람 보내기 from RabbitMQ)
+INFO 45379 --- [message-brokers-server] [pool-2-thread-6] i.b.g.b.c.handler.AlarmToLogHandler      : 로그로 보내는 알람 메세지 정보: AlarmToLog(message=로그 봇으로 알람 보내기 from RabbitMQ, extra=null)
 ```
 다른 로그는 다 지우고 유의미한 로그만 남기면 4개의 메시지가 전부 발행이 잘되고 리스너를 통해 각 `Consumer`들이 받아서 처리한 것을 볼 수 있다.
 
