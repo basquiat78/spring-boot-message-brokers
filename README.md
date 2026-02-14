@@ -73,7 +73,7 @@ basquiat:
     dlx-routing-key: dlx-default-routing-key
 ```
 
-이미 사용중인 `RabbitMQ`가 `Amazon MQ`를 사용하고 있다면 이에 맞춰 `username`, `password`를 변경한다.
+이미 사용중인 `RabbitMQ`나 `Amazon MQ`를 사용하고 있다면 이에 맞춰 `username`, `password`를 변경한다.
 
 포트 역시 세팅한 정보로 변경하고 반드시 `ssl.enabled`를 `true`롤 세팅해야 한다.
 
@@ -785,17 +785,17 @@ fun `메시지 처리 실패 시 재시도 로직 검증`() {
 
 
 ```text
-2026-02-09T14:03:36.065+09:00 DEBUG 26416 --- [message-brokers-server] [ 127.0.0.1:5674] o.s.a.r.c.PublisherCallbackChannelImpl   : PublisherCallbackChannelImpl: AMQChannel(amqp://basquiat@127.0.0.1:5674/,3) PC:Ack:1:false
-2026-02-09T14:03:36.083+09:00  INFO 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : Processing Message from [alarm.to.log]
-2026-02-09T14:03:36.093+09:00 ERROR 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : [DEAD LETTER] retry failed. Queue: alarm.to.log / message: AlarmToLog(message=로그 봇으로 알람 보내기, extra=extra data)
-2026-02-09T14:03:36.093+09:00 ERROR 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : Message handling failed: 에러 발생 - 리트라이 테스트
-2026-02-09T14:03:38.097+09:00  INFO 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : Processing Message from [alarm.to.log]
-2026-02-09T14:03:38.099+09:00 ERROR 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : [DEAD LETTER] retry failed. Queue: alarm.to.log / message: AlarmToLog(message=로그 봇으로 알람 보내기, extra=extra data)
-2026-02-09T14:03:38.099+09:00 ERROR 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : Message handling failed: 에러 발생 - 리트라이 테스트
-2026-02-09T14:03:42.107+09:00  INFO 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : Processing Message from [alarm.to.log]
-2026-02-09T14:03:42.110+09:00 ERROR 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : [DEAD LETTER] retry failed. Queue: alarm.to.log / message: AlarmToLog(message=로그 봇으로 알람 보내기, extra=extra data)
-2026-02-09T14:03:42.111+09:00 ERROR 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : Message handling failed: 에러 발생 - 리트라이 테스트
-2026-02-09T14:03:46.092+09:00 DEBUG 26416 --- [message-brokers-server] [ionShutdownHook] o.s.a.r.c.CachingConnectionFactory       : Closing cached Channel: PublisherCallbackChannelImpl: AMQChannel(amqp://basquiat@127.0.0.1:5674/,3)
+DEBUG 26416 --- [message-brokers-server] [ 127.0.0.1:5674] o.s.a.r.c.PublisherCallbackChannelImpl   : PublisherCallbackChannelImpl: AMQChannel(amqp://basquiat@127.0.0.1:5674/,3) PC:Ack:1:false
+INFO 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : Processing Message from [alarm.to.log]
+ERROR 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : [DEAD LETTER] retry failed. Queue: alarm.to.log / message: AlarmToLog(message=로그 봇으로 알람 보내기, extra=extra data)
+ERROR 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : Message handling failed: 에러 발생 - 리트라이 테스트
+INFO 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : Processing Message from [alarm.to.log]
+ERROR 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : [DEAD LETTER] retry failed. Queue: alarm.to.log / message: AlarmToLog(message=로그 봇으로 알람 보내기, extra=extra data)
+ERROR 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : Message handling failed: 에러 발생 - 리트라이 테스트
+INFO 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : Processing Message from [alarm.to.log]
+ERROR 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : [DEAD LETTER] retry failed. Queue: alarm.to.log / message: AlarmToLog(message=로그 봇으로 알람 보내기, extra=extra data)
+ERROR 26416 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : Message handling failed: 에러 발생 - 리트라이 테스트
+DEBUG 26416 --- [message-brokers-server] [ionShutdownHook] o.s.a.r.c.CachingConnectionFactory       : Closing cached Channel: PublisherCallbackChannelImpl: AMQChannel(amqp://basquiat@127.0.0.1:5674/,3)
 ```
 로그를 보면 3번까지 재시도를 하고 이후 종료하는 것을 확인할 수 있다.
 
@@ -841,11 +841,11 @@ fun `RabbitMQ 지연 발송 테스트`() {
 
 
 ```text
-2026-02-09T15:30:19.709+09:00 DEBUG 98747 --- [message-brokers-server] [    Test worker] o.s.amqp.rabbit.core.RabbitTemplate      : Publishing message [(Body:'[B@53466b67(byte[79])' MessageProperties [headers={__TypeId__=io.basquiat.global.broker.common.handler.AlarmToLog}, contentType=application/json, contentEncoding=UTF-8, contentLength=79, deliveryMode=PERSISTENT, expiration=5000, priority=0, deliveryTag=0])] on exchange [], routingKey = [alarm.to.log-delay]
-2026-02-09T15:30:19.715+09:00 DEBUG 98747 --- [message-brokers-server] [ 127.0.0.1:5674] o.s.a.r.c.PublisherCallbackChannelImpl   : PublisherCallbackChannelImpl: AMQChannel(amqp://basquiat@127.0.0.1:5674/,3) PC:Ack:1:false
-2026-02-09T15:30:24.727+09:00 DEBUG 98747 --- [message-brokers-server] [pool-2-thread-5] o.s.a.r.l.DirectMessageListenerContainer : SimpleConsumer [queue=alarm.to.log, index=0, consumerTag=amq.ctag-lGkDmYPzcXgIG8yuF4ttLA identity=7ce35d57] received (Body:'[B@5a803330(byte[79])' MessageProperties [headers={x-first-death-exchange=, x-last-death-reason=expired, x-death=[{reason=expired, original-expiration=5000, count=1, exchange=, time=Mon Feb 09 15:30:24 KST 2026, routing-keys=[alarm.to.log-delay], queue=alarm.to.log-delay}], x-first-death-reason=expired, x-first-death-queue=alarm.to.log-delay, x-last-death-queue=alarm.to.log-delay, x-last-death-exchange=, __TypeId__=io.basquiat.global.broker.common.handler.AlarmToLog}, contentType=application/json, contentEncoding=UTF-8, contentLength=0, receivedDeliveryMode=PERSISTENT, priority=0, redelivered=false, receivedExchange=basquiat-exchange, receivedRoutingKey=alarm.to.log, deliveryTag=1, consumerTag=amq.ctag-lGkDmYPzcXgIG8yuF4ttLA, consumerQueue=alarm.to.log])
-2026-02-09T15:30:24.764+09:00  INFO 98747 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : Processing Message from [alarm.to.log]
-2026-02-09T15:30:24.765+09:00  INFO 98747 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.c.handler.AlarmToLogHandler      : 로그로 보내는 알람 메세지 정보: AlarmToLog(message=로그 봇으로 알람 보내기, extra=extra data)
+DEBUG 98747 --- [message-brokers-server] [    Test worker] o.s.amqp.rabbit.core.RabbitTemplate      : Publishing message [(Body:'[B@53466b67(byte[79])' MessageProperties [headers={__TypeId__=io.basquiat.global.broker.common.handler.AlarmToLog}, contentType=application/json, contentEncoding=UTF-8, contentLength=79, deliveryMode=PERSISTENT, expiration=5000, priority=0, deliveryTag=0])] on exchange [], routingKey = [alarm.to.log-delay]
+DEBUG 98747 --- [message-brokers-server] [ 127.0.0.1:5674] o.s.a.r.c.PublisherCallbackChannelImpl   : PublisherCallbackChannelImpl: AMQChannel(amqp://basquiat@127.0.0.1:5674/,3) PC:Ack:1:false
+DEBUG 98747 --- [message-brokers-server] [pool-2-thread-5] o.s.a.r.l.DirectMessageListenerContainer : SimpleConsumer [queue=alarm.to.log, index=0, consumerTag=amq.ctag-lGkDmYPzcXgIG8yuF4ttLA identity=7ce35d57] received (Body:'[B@5a803330(byte[79])' MessageProperties [headers={x-first-death-exchange=, x-last-death-reason=expired, x-death=[{reason=expired, original-expiration=5000, count=1, exchange=, time=Mon Feb 09 15:30:24 KST 2026, routing-keys=[alarm.to.log-delay], queue=alarm.to.log-delay}], x-first-death-reason=expired, x-first-death-queue=alarm.to.log-delay, x-last-death-queue=alarm.to.log-delay, x-last-death-exchange=, __TypeId__=io.basquiat.global.broker.common.handler.AlarmToLog}, contentType=application/json, contentEncoding=UTF-8, contentLength=0, receivedDeliveryMode=PERSISTENT, priority=0, redelivered=false, receivedExchange=basquiat-exchange, receivedRoutingKey=alarm.to.log, deliveryTag=1, consumerTag=amq.ctag-lGkDmYPzcXgIG8yuF4ttLA, consumerQueue=alarm.to.log])
+INFO 98747 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.r.RabbitMqEventSubscriber        : Processing Message from [alarm.to.log]
+INFO 98747 --- [message-brokers-server] [pool-2-thread-5] i.b.g.b.c.handler.AlarmToLogHandler      : 로그로 보내는 알람 메세지 정보: AlarmToLog(message=로그 봇으로 알람 보내기, extra=extra data)
 지연이후 로그 부분
 ```
 로그를 보면 `2026-02-09T15:30:19`에 메세지가 발행되고 `2026-02-09T15:30:24`를 보면 5초후에 수신 한것을 확인할 수 있다.
