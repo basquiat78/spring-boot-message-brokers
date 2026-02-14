@@ -221,7 +221,7 @@ public @interface EnableTransactionManagement {
 그리고 락이 걸린 상태에서 모든 프로세스를 진행하고 락을 해제하게 되므로 `Race Condition`도 발생하지 않는다.
 
 
-![해당 로직 Mermaid 흐름도](https://github.com/basquiat78/spring-boot-message-brokers/blob/05-with-distributed-lock/ddl/sql.ddl)
+![해당 로직 Mermaid 흐름도](https://github.com/basquiat78/spring-boot-message-brokers/blob/05-with-distributed-lock/ddl/distributedlock.png)
 
 
 위 그림은 `DistributedLockAspect`의 흐름을 도식화한 이미지이다.
