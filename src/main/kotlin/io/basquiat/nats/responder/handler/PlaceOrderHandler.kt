@@ -4,6 +4,7 @@ import io.basquiat.domain.orders.code.OrderStatus
 import io.basquiat.domain.orders.entity.Order
 import io.basquiat.domain.orders.repository.OrderRepository
 import io.basquiat.domain.product.repository.ProductRepository
+import io.basquiat.global.annotations.DistributedLock
 import io.basquiat.global.utils.unableToJoin
 import io.basquiat.nats.model.PlaceOrder
 import io.basquiat.nats.model.PlaceOrderResponse
@@ -16,6 +17,7 @@ class PlaceOrderHandler(
     private val orderRepository: OrderRepository,
 ) {
     @Transactional
+    @DistributedLock(key = "#request.productId", waitTime = 10L, leaseTime = 3L, useWatchdog = true)
     fun execute(request: PlaceOrder): PlaceOrderResponse {
         val (productId, quantity) = request
 
