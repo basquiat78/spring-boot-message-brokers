@@ -415,4 +415,4 @@ LRU (Least Recently Used), 결국 오랫동안 사용되지 않은 키를 삭제
 
 # Next Step
 
-[번외 - Kafka Stream](https://github.com/basquiat78/spring-boot-message-brokers/tree/07-kafka-stream)
+[번외 - Kafka Streams](https://github.com/basquiat78/spring-boot-message-brokers/tree/07-kafka-streams)
