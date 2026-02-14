@@ -358,3 +358,5 @@ class LockTest
 ```
 
 # Next Step
+
+[번외 - Redis를 이용한 캐쉬 전략](https://github.com/basquiat78/spring-boot-message-brokers/tree/06-with-redis-cache)
