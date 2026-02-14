@@ -2,11 +2,10 @@ package io.basquiat.nats.responder.handler
 
 import io.basquiat.domain.orders.code.OrderStatus
 import io.basquiat.domain.orders.entity.Order
-import io.basquiat.domain.orders.repository.OrderRepository
+import io.basquiat.domain.orders.service.OrderService
 import io.basquiat.domain.reservation.code.ReservationStatus
 import io.basquiat.domain.reservation.entity.Reservation
-import io.basquiat.domain.reservation.repository.ReservationRepository
-import io.basquiat.global.extensions.findByIdOrThrow
+import io.basquiat.domain.reservation.service.ReservationService
 import io.basquiat.global.utils.unableToJoin
 import io.basquiat.nats.model.ReservationAction
 import io.basquiat.nats.model.ReservationActionResponse
@@ -16,8 +15,8 @@ import org.springframework.transaction.annotation.Transactional
 
 @Service
 class ReservationActionHandler(
-    private val reservationRepository: ReservationRepository,
-    private val orderRepository: OrderRepository,
+    private val reservationService: ReservationService,
+    private val orderService: OrderService,
 ) {
     @Transactional
     fun execute(
@@ -27,7 +26,7 @@ class ReservationActionHandler(
         println("request: $request, action: $action")
         val reservationId = request.reservationId
         val reservation =
-            reservationRepository.findByIdOrThrow(reservationId, "해적단 합류 예약 목록을 찾을 수 없습니다. 해적단 합류 예약 아이디: $reservationId")
+            reservationService.findByIdOrThrow(reservationId, "해적단 합류 예약 목록을 찾을 수 없습니다. 해적단 합류 예약 아이디: $reservationId")
 
         validateReservationStatus(reservation.status)
 
@@ -66,7 +65,7 @@ class ReservationActionHandler(
                 quantity = 1,
                 status = OrderStatus.COMPLETED,
             )
-        val completeOrder = orderRepository.save(entity)
+        val completeOrder = orderService.create(entity)
         return completeOrder.id!!
     }
 
