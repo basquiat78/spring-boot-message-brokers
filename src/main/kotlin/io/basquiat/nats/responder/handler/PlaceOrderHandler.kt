@@ -2,8 +2,8 @@ package io.basquiat.nats.responder.handler
 
 import io.basquiat.domain.orders.code.OrderStatus
 import io.basquiat.domain.orders.entity.Order
-import io.basquiat.domain.orders.repository.OrderRepository
-import io.basquiat.domain.product.repository.ProductRepository
+import io.basquiat.domain.orders.service.OrderService
+import io.basquiat.domain.product.service.ProductService
 import io.basquiat.global.utils.unableToJoin
 import io.basquiat.nats.model.PlaceOrder
 import io.basquiat.nats.model.PlaceOrderResponse
@@ -12,17 +12,16 @@ import org.springframework.transaction.annotation.Transactional
 
 @Service
 class PlaceOrderHandler(
-    private val productRepository: ProductRepository,
-    private val orderRepository: OrderRepository,
+    private val productService: ProductService,
+    private val orderService: OrderService,
 ) {
     @Transactional
     fun execute(request: PlaceOrder): PlaceOrderResponse {
         val (productId, quantity) = request
 
         val product =
-            productRepository
-                .findById(productId)
-                .orElseThrow { NoSuchElementException("해당 보물을 찾을 수 없습니다.") }
+            productService
+                .findByIdOrThrow(productId, "해당 보물을 찾을 수 없습니다. 보물 아이디: $productId")
         if (product.quantity < quantity) unableToJoin("재고가 부족하여 해적단에 합류할 수 없습니다!")
         product.quantity -= quantity
         val entity =
@@ -31,7 +30,7 @@ class PlaceOrderHandler(
                 quantity = quantity,
                 status = OrderStatus.COMPLETED,
             )
-        val completeOrder = orderRepository.save(entity)
+        val completeOrder = orderService.create(entity)
         return PlaceOrderResponse(orderId = completeOrder.id)
     }
 }

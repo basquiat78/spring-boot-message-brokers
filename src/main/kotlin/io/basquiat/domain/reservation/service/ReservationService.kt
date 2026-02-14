@@ -14,7 +14,10 @@ class ReservationService(
     fun create(entity: Reservation): Reservation = repository.save(entity)
 
     @Transactional(readOnly = true)
-    fun findByIdOrThrow(id: Long): Reservation = repository.findByIdOrThrow(id)
+    fun findByIdOrThrow(
+        id: Long,
+        message: String? = null,
+    ): Reservation = repository.findByIdOrThrow(id, message)
 
     @Transactional(readOnly = true)
     fun findByIdOrNull(id: Long): Reservation? = repository.findByIdOrNull(id)
