@@ -33,6 +33,6 @@ class PlaceReservationHandler(
                 status = ReservationStatus.PENDING,
             )
         val completeReservation = reservationService.create(reservation)
-        return PlaceReservationResponse(reservationId = reservation.id)
+        return PlaceReservationResponse(reservationId = completeReservation.id)
     }
 }
