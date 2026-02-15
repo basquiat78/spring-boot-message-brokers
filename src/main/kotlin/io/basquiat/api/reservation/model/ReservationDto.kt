@@ -7,7 +7,7 @@ import io.basquiat.domain.reservation.entity.Reservation
 import io.basquiat.global.type.LongIdentifiable
 import java.time.LocalDateTime
 
-class ReservationDto(
+data class ReservationDto(
     override val id: Long,
     val product: ProductDto,
     val reservedAt: LocalDateTime,

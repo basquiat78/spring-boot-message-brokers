@@ -5,11 +5,12 @@ import io.basquiat.domain.product.entity.Product
 import io.basquiat.global.type.LongIdentifiable
 import java.time.LocalDateTime
 
-class ProductDto(
+data class ProductDto(
     override val id: Long,
     val name: String,
     val price: Long,
     val quantity: Int,
+    val viewCount: Long? = null,
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS")
     val createdAt: LocalDateTime,
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS")
@@ -33,4 +34,6 @@ class ProductDto(
                 )
             }
     }
+
+    fun withViewCount(viewCount: Long) = this.copy(viewCount = viewCount)
 }

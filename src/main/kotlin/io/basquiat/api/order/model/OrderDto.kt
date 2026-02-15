@@ -7,7 +7,7 @@ import io.basquiat.domain.orders.entity.Order
 import io.basquiat.global.type.LongIdentifiable
 import java.time.LocalDateTime
 
-class OrderDto(
+data class OrderDto(
     override val id: Long,
     val product: ProductDto,
     val quantity: Int,

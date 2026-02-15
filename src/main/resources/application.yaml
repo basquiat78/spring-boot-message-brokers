@@ -13,4 +13,4 @@ app:
   messaging:
     use-amqp: false
     use-redis: false
-    use-kafka: false
+    use-kafka: true

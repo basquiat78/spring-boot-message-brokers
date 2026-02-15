@@ -166,3 +166,8 @@ nats:
   max-delivery: 3
   durable-suffix: _group
   api-allow-subject: "basquiat.>"
+
+kafka:
+  stream-aggregator: onepiece-stream-aggregator
+  state-store-dir: "./kafka-streams-state"
+  consumer-id: basquiat-local-consumer

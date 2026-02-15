@@ -1,418 +1,823 @@
-# Redis Cache
+# Kafka Streams
 
-캐쉬의 중요성은 딱히 설명할 필요가 있을까?
+이런 걸 생각해 보자.
 
-당연한 이야기겠지만 대부분의 웹은 디비를 사용하게 된다.
+```text
+1. 해적단 합류 총 랭킹 집계를 내고 싶은데?
+2. 해적단 예약 합류 총 랭킹 집계를 내고 싶은데>
+3. 해적단 예약 합류하다가 취소한 집계를 내고 싶은데? 
+```
 
-어떤 데이터를 저장하고 업데이트하고 수정하는 행위가 `RDBMS`를 통해 이뤄지게 된다.
+만일 지금처럼 `NATS`의 `Request-Reply`가 아닌 이벤트 방식으로 이것을 운영한다면 충분히 가능할 것이다.
 
-트래픽이 많지 않다면 별 의미가 없겠지만 만일 프로모션이나 이벤트가 별어지면서 동시 접속 사용자가 많아지면 디비에 많은 요청을 하게 될것이다.
+이것을 가능케 할려고 하는게 `Kafka Streams`이다.
 
-우리가 어떤 상품이나 리스트를 볼 때 이런 정보들은 특별한 경우가 아니면 데이터가 변경되지 않는다.
+단순히 `pub/sub`이 아닌 로그를 통해 어떤 정보를 가공할 수 있는데 그렇다면 지금같은 구조에서 어떻게 하면 좋을까?
 
-물론 재고관련 변경되는 정보들이 있겠지만 다른 정보들이 변경되는 일은 거의 없다.
+방법은 딱 하나다.
 
-동시 접속 사용자를 1000명이라고 특별한 이벤트를 하는 한 상품이 있다고 생각해 보자.
+`NATS`를 통해 어떤 요청들이 들어올 때 그것을 처리하고 `Kafka Streams`를 통해 정보를 모으면 된다.
 
-1000명이 특정상품을 보기 위해 접근할 것이고 상품 정보를 가져오기위해 1000번의 트랜잭션이 디비에서 일어나게 될것이다.
+지금까지 진행해 오면서 같은 공통 `BrokerChannel`과 `BrokerType`을 통해서 공통 토픽에 대해서 `pub/sub`을 진행을 해 왔다.
 
-하지만 만일 최초 한번 디비에서 상품을 가져오고 그 이후 정보를 캐시에서 가져오게 된다면 이 횟수를 획기적으로 줄일 수 있다.
+이제는 구조를 좀 나눠볼 필요가 있다.
 
-디비의 부하를 확 줄이면 그만큼 동시 접속 사용자의 트래픽을 처리하는데 부담이 굉장히 줄게 된다.
+# Stream Processor
 
-이걸 또 설명할 이유가 없겠지만 쓰고 보니 대충 끄적여 보면 그렇다
+## Topology
 
-위에 언급한 내용을 토대로 다음과 같은 개념을 알고 있어야 한다.
+우리가 하고자 하는 것은 일종의 흐름으로 외부에서 바라볼 필요가 있다.
 
-이미 알고 있을 수 있겠지만 설명은 해야 하니깐...
+지금까지 `pub/sub`은 `메시지 발행 > 브로커 > 메시지 소모`라는 아주 단순한 방식으로 구현하고 진행해 왔다.
 
-# Cache Hit 와 Cache Miss
+그런데 이런 생각을 해 볼 수 있다. 
 
-말 그대로다
+```text
+좋아!
+다 이해했어!
 
-캐시에 데이터가 있으면 그 정보를 가져온다.
+그런데 이렇게 메시지가 오고가고 소모를 하는 그 와중에 특정 데이터를 원하는 대로 가공을 할 수 있지 않을까???
+```
 
-어? 없네?
+`pub/sub`은 단순하지만 어쨰든 이것은 가장 기본이 되는 부분이다.
 
-이런 상황이면 디비에서 데이터를 조회하고 그 데이터는 캐시에 넣는다.
+이것을 크게 잡아서 다음과 같이 설명을 할 수 있다.
 
-# 의문점이 든다.
+### SOURCE
 
-_**그럼 메모리에 올려놓고 사용하면 되겠네?**_
+소스라는 것을 딱히 설명할 필요가 있을까?
 
-라고 하겠지만 만일 디비에서 조회하는 상품이 엄청 많다면 그만큼 메모리에 올라오게 될 것이다.
+데이터가 스트림즈를 통해 흘러갈 때 처음 데이터가 진입하는 시점에서 이것을 `Source`라고 할 수 있을 것이다.
 
-당연하겠지만 메모리도 리소스이다.
+가장 기본적인 내용이지만 결국 우리가 데이터를 처리하려면 데이터를 읽어와야 한다.
 
-이런 이유로 무작정 메모리에 남겨둘 수 없다. 
-그래서 보통 캐시가 유효한 시간인 `ttl`을 설정하게 된다.
+`pub/sub`의 개념이 쉬우면서도 가장 기본이 되는 이유는 이런 부분이다.
 
-비록 짧은 시간이지만 10000명이 거의 동시대에 들어온다 해도 이 짧은 시간 설정한 값만으로도 디비에 엄청난 부담을 덜어줄 수 있다.
+우리가 어느 토픽으로 데이터를 발행할 것인지가 바로 시작점이다.
 
-이렇게 말하고 보니 개념이라고까지 설명할 필요도 없다.
+### Processor
 
-# Cache Strategy
+그렇다면 이제는 `Kafka`를 통해서 이렇게 들어온 데이터를 어느 토픽에서 읽고 처리를 하게 된다.
 
-캐시는 크게 두가지 전략으로 나눈다.
+토픽으로 상품을 조회하는 데이터가 들어오게 된다면 이것을 먼저 가공할 수 있도록 변환하는 작업이 필요하다.
 
-하나는 `Read Cache Strategy`고 하나는 `Write Cache Strategy`
+그리고 상품 아이디 별로 분류를 하는 작업과 집계를 통해서 원하는 데이터로 가공을 하게 된다.
 
-## Read Cache Strategy
+### Sink
 
-### Look-Aside (Cache Aside) Pattern
+이렇게 가공된 데이터를 다른 곳으로 `publish`하고 다른 곳에서 소비할 수도 있다.
 
-가장 대중적이고 우리가 흔히 사용하는 캐시 전략이라면 이 방식일 것이다.
+여기서는 `State Store`, 일명 상태 저장소에 저장하고 이것을 읽어가도록 할 것이다.
 
-최초 한번 DB에서 조회한 정보를 메모리에 올리고 이때 설정한 `ttl`동안 캐시에서 가져오는 방식이다.
 
-쉽게 구성할 수 있지만 이 방식은 `ttl`을 얼마나 유지하냐가 굉장히 중요해진다.
+# Stream Topic을 결정하자.
 
-그리고 캐시가 없으면 디비에서 조회를 하고 그 데이터를 캐시에 쓰는 방식이다.
+`NATS`의 `Request-Reply`을 위해 이전 브랜치에서 `ApiSubject`을 설정했다.
 
-가장 쉽게 생각할 수 있는 방식이 아닌가?
+여기서 우리가 필요한 토픽은 다음과 같다.
 
-#### Thundering Herd???
+- 합류 (basquiat.order.create)
+- 예약 합류 (basquiat.reservation.create)
+- 예약 합류 확정 (basquiat.reservation.confirm)
+- 예약 합류 취소 (basquiat.reservation.cancel)
+- 해적단 보물 조회 (basquiat.product.fetch)
 
-위에서 `cache miss`에 대해서 설명했는데 만일 엄청난 요청이 들어오고 있는데 `cache miss`가 일어난다면?
-
-그 트래픽이 순식간에 디비로 몰리는 현상이 발생할 수 있다.
-
-### Read Through Pattern
-
-실제 사용해 본 적은 없고 개념적으로 설명하자면 이것이다.
-
-~~난 무조건 캐시에서만 데이터를 조회하겠다!!!!!!~~
-
-그러면 캐시가 없을 때 누가 캐시에 쓰나? 라는 궁금증이 생긴다.
-
-이것은 미들웨어에 위임시키는 방식이다.
-
-장점은 데이터의 정합성을 말하는데 사용해 본적이 없어서 이에 대한 자세한 이야기는 할 수 없다.
-
-경험치 부족
-
-## Write Cache Strategy
-
-### Write Back Or Behind Pattern
-
-이것도 사용해 본 적은 없다. 역시 경험치 부족이다.
-
-다만 개념적으로는 이런 방식이다.
-
-어떤 업데이트 정보가 있다면 이것을 바로 디비에 갱신하지 않는다.
-
-그리고 스케쥴링또는 배치 작업을 통해 일정 기간이 지나면 그 캐시를 기준으로 디비와 동기화를 맞춘다.
-
-외부의 관점에서 본다면 캐시는 일종의 큐같은 역할을 하게 된다.
-
-`read/write`가 바로바로 되는것이 아닌 배치를 통해 일정기간이 지나면 실행이 되니 좋아보인다.
-
-디비가 어떤 이유로 장애가 났을 경우 캐시가 그 역할을 해 줄테니 문제가 없겠지만 반대로 생각해 보자.
-
-캐시가 문제가 생기면?
-
-### Write Through Pattern
-
-업데이트 정보가 생기면 캐시에도 저장하고 디비에도 저장을 한다.
-
-외부의 관점에서 보면 두 번의 `write`가 발생하는 것처럼 보인다.
-
-굉장히 안정적일 것이다. 두 번의 쓰기 행위는 데이터의 유실을 최소화하고 동기를 맞추기 때문에 일관성을 갖을 수 있을 것이다.
-
-하지만 그만큼 빈번하게 발생하면 이것도 성능 이슈가 될 수 있지 않을까?
-
-### Write Around Pattern
-
-`Write Through Pattern`는 달리 캐시에 저장하지 않고 디비에만 저장한다.
-
-그리고 `cache miss`가 발생하면 그때 디비와 캐시에 저장하는 방식이다.
-
-
-# 가장 대중적인 방식
-
-위 읽기/쓰기 전략을 보면 딱 눈에 들어온다.
-
-`Look-Aside (Cache Aside) Pattern`과 `Write Around Pattern` 방식을 조합하는게 찰떡 궁합이 아닌가.
-
-다른 것들은 내가 잘 모르기 때문에 여기서는 이방식으로 진행할 것이다.
-
-사실 대부분 스프링에서 이것을 쉽게 구현할 수 있도록 제공하기 때문에 우리는 위 개념을 가지고 구현만 하면 된다.
-
-# 설정
-
-다음과 같이 `Redis`를 사용할 것이기 때문에 설정을 할 수도 있다.
+해적단 보물 조회는 어떤 보물이 인기가 많은지 집계를 할 필요가 있다고 판단하고 부가적으로 추가를 했다.
 
 ```yaml
-spring:
-  cache:
-    type: redis
-    redis:
-      # 명시적으로 만료 시간 10분 (기본값)
-      time-to-live: 600s # 기본 만료 시간 (10분)
-      # null값도 캐싱하도록 해서 대기 현상을 방지하도록 하자
-      cache-null-values: true
-```
-하지만 우리는 직접 만들것이다.
+app:
+  messaging:
+    use-amqp: false
+    use-redis: false
+    use-kafka: true
 
-먼저 `레디스 캐시`를 사용할 부분을 정의를 해서 자동으로 `enum`을 통해서 설정할 수 있도록 `enum`을 하나 만들자.
+kafka:
+  stream-aggregator: onepiece-stream-aggregator
+  state-store-dir: "./kafka-streams-state"
+  consumer-id: basquiat-local-consumer
+```
+이전 브랜치에서는 `NATS`를 위해서 나머지 전부 `false`로 두었는데 여기서 `Kafka`를 활성화 시키고 `Configuration`에서 스트림즈 관련 구성을 하기 위해 아래 정보를 추가로 넣는다.
+
+그리고 로그가 너무 많기 때문에 불필요한 로그를 찍지 않도록 `logback-spring.xml`에 `kafka`관련 로그는 `WARN`으로 설정을 해놨다.
+
+먼저 스트림즈용 토픽을 모은 `enum`을 하나 만들자.
 
 ```kotlin
-enum class CacheType(
-    val cacheName: String,
-    val ttl: Duration,
-    val clazz: Class<out Any> = Any::class.java,
+enum class KafkaStreamTopic(
+    val topic: String,
+    val aggregationKey: String,
 ) {
-    DEFAULT("default", Duration.ofMinutes(10)),
-    PRODUCT("product", Duration.ofHours(1), ProductDto::class.java),
-    RESERVATION("reservation", Duration.ofHours(1), ReservationDto::class.java),
-    ORDER("order", Duration.ofHours(1), OrderDto::class.java),
+    PRODUCT_FETCH("basquiat.product.fetch", "search-join-store"),
+    ;
+
+    companion object {
+        val allTopic: List<String>
+            get() = entries.map { it.topic }
+
+        fun findByName(name: String) = entries.find { it.topic == name }
+    }
 }
 ```
-이것을 통해 캐시 키와 `ttl`, 그리고 매핑되는 데이터 타입을 정의한다.
 
-기본은 10분, 나머지는 1시간을 잡았는데 이 값은 시스템 상황이나 트래픽을 보고 최적화된 값을 찾는 것이 중요하다.
+스트림즈를 통해 정보를 모아야 하기 때문에 스트림즈 토픽으로 보낼 스트림즈용 `publisher`를 따로 작업한다.
+
+참고로 최초 로드를 할 때 토픽을 미리 생성하고 그것을 처리하는 `Processor`가 존재해야 에러가 나지 않는다.
+
+일단 먼저 보물을 조회할때마다 어떤 데이터 처리를 해 볼 생각이다.
 
 
 ```kotlin
-@file:Suppress("DEPRECATION")
+@ConditionalOnKafka
+@Service("kafkaStreamPublisher")
+class KafkaStreamPublisher(
+    private val kafkaTemplate: KafkaTemplate<String, Any>,
+) {
+    private val log = logger<KafkaStreamPublisher>()
 
-@Configuration
-@EnableCaching
-class RedisCacheConfig : CachingConfigurer {
-    @Bean
-    fun redisCacheManager(connectionFactory: RedisConnectionFactory): RedisCacheManager {
-        val cacheConfigs =
-            CacheType.entries.associate { type ->
-                type.cacheName to createCacheConfiguration(type)
+    fun <T : Any> publish(
+        kafkaStreamTopic: KafkaStreamTopic,
+        key: String,
+        message: T,
+    ) {
+        kafkaTemplate
+            .send(kafkaStreamTopic.topic, key, message)
+            .thenAccept { result ->
+                val metadata = result.recordMetadata
+                log.info("[Kafka] 전송 성공: Topic=${metadata.topic()}, Offset=${metadata.offset()}")
+            }.exceptionally { ex ->
+                log.error("[Kafka] 전송 실패: ${ex.message}")
+                null
             }
-
-        val defaultConfig =
-            cacheConfigs[CacheType.DEFAULT.cacheName]
-                ?: notFound("기본 캐시 설정(DEFAULT)이 Enum에 정의되지 않았습니다.")
-
-        return RedisCacheManager
-            .builder(connectionFactory)
-            .cacheDefaults(defaultConfig)
-            .withInitialCacheConfigurations(cacheConfigs)
-            .build()
     }
+}
+```
+여기서 `key`는 보물 아이디, 합류 아이디, 합류 예약 아이디 정보가 들어올 것이다. 
 
-    private fun createCacheConfiguration(type: CacheType): RedisCacheConfiguration {
-        val serializer = Jackson2JsonRedisSerializer(mapper, type.clazz)
-        return RedisCacheConfiguration
-            .defaultCacheConfig()
-            .entryTtl(type.ttl)
-            .disableCachingNullValues()
-            .computePrefixWith { cacheName -> "onepiece:$cacheName:" }
-            .serializeKeysWith(
-                RedisSerializationContext.SerializationPair.fromSerializer(StringRedisSerializer()),
-            ).serializeValuesWith(
-                RedisSerializationContext.SerializationPair.fromSerializer(serializer),
-            )
+이것을 통해서 스트림즈가 `groupBy`나 `count`등 특정 작업을 통해서 데이터를 가공할 것이다.
+
+기존의 `KafkaConfig`에서는 단순한 리스트 컨테이너 팩토리만 설정을 했는데 이제는 스트림즈를 사용할 것이기 때문에 해당 설정 빈을 추가한다.
+
+그리고 기존에 테스트했던 `KafkaEventSubscriber`은 이제는 빈으로 등록하지 않도록 주석을 처리했다.
+
+왜냐하면 `BrokerChannel`에 있는 토픽을 등록하도록 했지만 이제는 이것을 사용하지 않을 것이기 때문이다.
+
+그 부분은 아래 코드를 보면 확인할 수 있다.
+
+```kotlin
+@Configuration
+@EnableKafkaStreams
+@ConditionalOnKafka
+class KafkaConfig(
+    private val props: KafkaProperties,
+    @Value($$"${kafka.stream-aggregator:onepiece-stream-aggregator}")
+    private val streamAggregator: String,
+    @Value($$"${kafka.state-store-dir:./kafka-streams-state}")
+    private val stateStoreDir: String,
+    @Value($$"${kafka.consumer-id:basquiat-local-consumer}")
+    private val consumerId: String,
+) {
+    @Bean
+    fun kafkaListenerContainerFactory(
+        configurer: ConcurrentKafkaListenerContainerFactoryConfigurer, // 스프링이 제공하는 설정 대리인
+        consumerFactory: ConsumerFactory<Any, Any>,
+    ): ConcurrentKafkaListenerContainerFactory<Any, Any> {
+        val factory = ConcurrentKafkaListenerContainerFactory<Any, Any>()
+        // yaml 설정 그대로 구성한다.
+        configurer.configure(factory, consumerFactory)
+        factory.containerProperties.listenerTaskExecutor =
+            SimpleAsyncTaskExecutor("kafka-virtual-threads-").apply {
+                setVirtualThreads(true)
+            }
+        return factory
     }
 
     /**
-     * 캐시 관련해서 redis가 어떤 이유로 장애가 발생하면 문제에 대한 로그만 남기도록 한다.
+     * 스트림즈를 위한 토픽을 생성한다.
      */
-    override fun errorHandler(): CacheErrorHandler =
-        object : SimpleCacheErrorHandler() {
-            override fun handleCacheGetError(
-                exception: RuntimeException,
-                cache: Cache,
-                key: Any,
-            ) {
-                logger<RedisCacheConfig>().error("Redis Get Error [Key: $key]: ${exception.message}")
+    @Bean
+    fun createTopics(): KafkaAdmin.NewTopics {
+        // 먼저 스트림즈용 토픽을 미리 생성한다.
+        val topics =
+            KafkaStreamTopic.entries.map {
+                TopicBuilder
+                    .name(it.topic)
+                    .partitions(3)
+                    .replicas(1)
+                    .build()
             }
+        return KafkaAdmin.NewTopics(*topics.toTypedArray())
+    }
 
-            override fun handleCachePutError(
-                exception: RuntimeException,
-                cache: Cache,
-                key: Any,
-                value: Any?,
-            ) {
-                logger<RedisCacheConfig>().error("Redis Put Error [Key: $key]: ${exception.message}")
-            }
+    @Bean(name = [KafkaStreamsDefaultConfiguration.DEFAULT_STREAMS_CONFIG_BEAN_NAME])
+    fun kStreamConfig(): KafkaStreamsConfiguration {
+        val config = mutableMapOf<String, Any>()
+        config[StreamsConfig.APPLICATION_ID_CONFIG] = streamAggregator
+        config[StreamsConfig.BOOTSTRAP_SERVERS_CONFIG] = props.bootstrapServers
 
-            override fun handleCacheEvictError(
-                exception: RuntimeException,
-                cache: Cache,
-                key: Any,
-            ) {
-                logger<RedisCacheConfig>().error("Redis Evict Error [Key: $key]: ${exception.message}")
-            }
-        }
+        config[StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG] = Serdes.String().javaClass
+        config[StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG] = Serdes.String().javaClass
+
+        // 역직렬화 에러 핸들러 설정
+        config[StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG] =
+            LogAndContinueExceptionHandler::class.java
+        // 직렬화 에러 핸들러 설정
+        config[StreamsConfig.PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG] =
+            DefaultProductionExceptionHandler::class.java
+
+        // 병렬 처리 성능 개선을 위해 설정
+        config[StreamsConfig.NUM_STREAM_THREADS_CONFIG] = Runtime.getRuntime().availableProcessors()
+        config[StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG] = StreamsConfig.OPTIMIZE
+
+        // 만일 클러스터 구성으로 설정하게 되면 복제본 숫자로 세팅한다.
+        // 일반적으로 홀수로 최소 3개 이상으로 세팅할텐데 그에 맞춰서 설정을 한다.
+        // 여기서는 로컬로 한대만 띄우기 때문에 1
+        config[StreamsConfig.REPLICATION_FACTOR_CONFIG] = 1
+
+        // RocksDB 상태 저장소의 일관성을 위한 지연 시간 설정을 명시적으로 하자.
+        config[StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG] = 10_000L
+        // macos에서 테스트하기 때문에 다음과 같이 로컬에서 state store 경로를 지정을 하자.
+        // 그렇지 않으면 rebalancing 에러가 발생해서 작동을 하지 않는다.
+        // 프로젝트 root에 해당 폴더가 생성되고 rocksdb같은 폴더와 특정 정보들이 이곳에 생성된다.
+        config[StreamsConfig.STATE_DIR_CONFIG] = stateStoreDir
+        config[StreamsConfig.COMMIT_INTERVAL_MS_CONFIG] = 1000
+
+        config[ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG] = 300000
+        config[ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG] = 45000
+        config[ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG] = 3000
+        // 컨슈머에서 서버가 죽었다 뜰 때 나 아까 그넘이라는 것을 알려주는 고유한 값.
+        // 지금은 로컬이기 때문에 컨슈머가 하나라 하드코딩을 하고 있지만 실제로는 컨슈머마다 값을 다르게 세팅해야 한다.
+        config[ConsumerConfig.GROUP_INSTANCE_ID_CONFIG] = consumerId
+
+        return KafkaStreamsConfiguration(config)
+    }
 }
 ```
+로컬에서 테스트하기 때문에 몇가지 특이 설정이 있는데 그중에 하나가 `config[StreamsConfig.STATE_DIR_CONFIG] = stateStoreDir`이다.
 
-현재 구조에서 테스트 범위를 좁힐 예정이다.
+`State Store`는 일종의 저장소이다.
 
-먼저 특정 아이디에 대한 조회 부분에서 
+그래서 저장을 하기 위한 공간이 필요한데 이것을 따로 설정하지 않으면 현재 `macOs`의 경우 저장소를 생성하지 못해 문제가 발생한다.
+
+또한 저장소에 저장할 때 `Serdes`를 통해 `String`타입으로 `key:value`로 저장하도록 설정했다.
+
+이것은 어디까지나 성격에 따라 달라질 수 있기 때문에 이 부분은 조절을 해야 한다.
+
+스트링 타입으로 두면 좀 편하기 때문에 여기서는 스트링 타입으로 설정을 했다.
+
+# 보물을 조회시 어떤 보물을 얼마나 조회했는지 집계를 해보자.
+
+```kotlin
+@Component
+class ProductFetchStreamProcessor {
+    @Bean
+    fun productFetchCountStream(builder: StreamsBuilder): KStream<String, Long> {
+        val stream =
+            builder.stream(
+                KafkaStreamTopic.PRODUCT_FETCH.topic,
+                Consumed.with(Serdes.String(), Serdes.String()),
+            )
+
+        val countBuilder =
+            stream
+                .groupByKey()
+                .count(
+                    Materialized
+                        .`as`<String, Long, KeyValueStore<Bytes, ByteArray>>(
+                            KafkaStreamTopic.PRODUCT_FETCH.aggregationKey,
+                        ).withKeySerde(Serdes.String())
+                        .withValueSerde(Serdes.Long()),
+                )
+
+        return countBuilder.toStream()
+    }
+}
+```
+단순하게 들어온 정보로부터 `groupByKey`를 통해서 상품별로 그룹을 하고 조회 카운터를 `aggregationKey`에 갱신을 할 것이다.
+
+기본적으로 `Consumed.with(Serdes.String(), Serdes.String())`에서는 이렇게 되어 있지만 반환할때는 이 값을 `Long`으로 반환하도록 설정을 했다.
+
+그리고 우리는 기존의 `NATS`의 `FetchProductHandler`를 변경하자.
+
+예를 들면 이런 식이다.
+
+```text
+오늘 해적단 합류를 할려고 보물을 몇 사람이 보고 있어요!
+```
+
+이런거 알려주고 싶지 않은가???
+
+그렇다면 `ProductFetchStreamProcessor`를 통해서 `State Store`에 저장된 정보를 조회하는 서비스를 하나 만들어 보자
 
 ```kotlin
 @Service
-class ProductService(
-    private val repository: ProductRepository,
+class StreamStateStoreQueryService(
+    private val factoryBean: StreamsBuilderFactoryBean,
 ) {
-    fun create(entity: Product): Product = repository.save(entity)
+    private val log = logger<StreamStateStoreQueryService>()
 
-    @Transactional(readOnly = true)
-    fun findByIdOrThrow(
-        id: Long,
-        message: String? = null,
-    ): Product = repository.findByIdOrThrow(id, message)
+    private val defaultCount: Long = 0L
 
-    @Cacheable(value = ["product"], key = "#productId")
-    fun findByIdForCache(productId: Long): ProductDto {
-        val product = repository.findByIdOrThrow(productId, "보물을 찾을 수 없습니다. 보물 아이디: $productId")
-        return ProductDto.toDto(product)
+    /**
+     *  상품의 실시간 조회수 가져오기
+     */
+    fun getProductViewCount(productId: String): Long {
+        val kafkaStreams = factoryBean.kafkaStreams ?: return defaultCount
+
+        // 어떤 이유로 State Store가 RUNNING이 아닐 때는 서비스가 중단되는 것을 막기 위해 기본값을 던지도록 한다.
+        if (kafkaStreams.state() != KafkaStreams.State.RUNNING) {
+            log.warn("Kafka Streams State : ${kafkaStreams.state()}")
+            return defaultCount
+        }
+
+        return try {
+            val store =
+                kafkaStreams.store(
+                    StoreQueryParameters.fromNameAndType(
+                        KafkaStreamTopic.PRODUCT_FETCH.aggregationKey,
+                        QueryableStoreTypes.keyValueStore<String, Long>(),
+                    ),
+                )
+            store.get(productId) ?: defaultCount
+        } catch (e: InvalidStateStoreException) {
+            // 리밸런싱 중이거나 상태가 변했을 때 잡아서 로그만 남기고 기본 값을 던지도록 한다.
+            log.error("Kafka Streams Status is REBALANCING or Change: ${e.message}")
+            defaultCount
+        }
     }
-
-    @Transactional(readOnly = true)
-    fun findByIdOrNull(id: Long): Product? = repository.findByIdOrNull(id)
-
-    @Transactional(readOnly = true)
-    fun findAll(
-        lastId: Long?,
-        limit: Long,
-    ): List<Product> = repository.findAllByCursor(lastId, limit)
 }
 ```
-캐시를 적용한 메소드를 하나 만들고
+위 코드를 보면 `KafkaStreams`에서 `ProductFetchStreamProcessor`에 의해 `aggregationKey`로 저장된 정보를 가져오도록 한다.
+
+이것을 이제는 `FetchProductHandler`에서 사용하도록 변경한다.
+
+```kotlin
+/**
+ * 기존 dto에 viewCount를 추가한다.
+ */
+data class ProductDto(
+    override val id: Long,
+    val name: String,
+    val price: Long,
+    val quantity: Int,
+    val viewCount: Long? = null,
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS")
+    val createdAt: LocalDateTime,
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS")
+    val updatedAt: LocalDateTime,
+) : LongIdentifiable {
+    companion object {
+        /**
+         * entity to dto convert
+         * @param entity
+         * @return ProductDto
+         */
+        fun toDto(entity: Product) =
+            with(entity) {
+                ProductDto(
+                    id = id!!,
+                    name = name,
+                    price = price,
+                    quantity = quantity,
+                    createdAt = createdAt,
+                    updatedAt = updatedAt,
+                )
+            }
+    }
+
+    fun withViewCount(viewCount: Long) = this.copy(viewCount = viewCount)
+}
+
+@Service
+class FetchProductHandler(
+    private val productService: ProductService,
+    private val kafkaStreamPublisher: KafkaStreamPublisher,
+    private val streamStateStoreQueryService: StreamStateStoreQueryService,
+) {
+    fun execute(request: FetchProduct): FetchProductResponse {
+        val productId = request.productId
+
+        // 스트림즈로 publish하면 앞서 정의한 Processor가 데이터를 처리한다.
+        kafkaStreamPublisher.publish(
+            kafkaStreamTopic = KafkaStreamTopic.PRODUCT_FETCH,
+            key = productId.toString(),
+            message = "PRODUCT_VIEW_COUNT_EVENT",
+        )
+
+        val product =
+            productService
+                .findByIdForCache(productId)
+
+        // 조회 이후 state store를 통해서 조회수를 가져온다.
+        val viewCount = streamStateStoreQueryService.getProductViewCount(productId.toString())
+        return FetchProductResponse(product = product.withViewCount(viewCount))
+    }
+}
+```
+이제 스웨거를 통해서 조회를 해보자.
+
+
+```json
+{
+  "path": "/api/products/1",
+  "status": 200,
+  "result": {
+    "id": 1,
+    "name": "[품절주의] 몽키 D. 루피 고무고무 열매",
+    "price": 5656000,
+    "quantity": 0,
+    "viewCount": 0,
+    "createdAt": "2026-02-12T13:40:48.593326",
+    "updatedAt": "2026-02-12T13:40:48.593326"
+  },
+  "timestamp": "2026-02-15T17:10:46.777182"
+}
+```
+최초 0이지만 클릭을 할 때마다 카운트가 증가하게 된다.
+
+다만 이 방식은 좀 타이밍상으로 문제가 있다.
+
+예를 들면 순차적으로 늘어나길 기대하겠지만 `Processor`가 처리하고 커밋을 치는 간격이 존재할 수 있다.
+
+그래서 1, 2, 3 처럼 순차적으로 증가되기도 하지만 4, 4, 6처럼 건너띄고 넘어오는 경우도 있다.
+
+아마도 5를 처리하는 시간이 좀 걸려서 4를 가져오고 다음 처리에는 제대로 가져와서 6을 가져오기도 한다.
+
+이 방식은 이것보다는 아래와 같은 방식으로 처리하는 것이 좋을 것이다.
+
+```text
+1. 어떤 사람이 보물을 조회했다.
+2. 바로 이 정보를 보여주지 않고 웹소켓이나 딜레이를 주고 풀링 방식으로 이 정보를 가져온다.
+3. 보고 있는 사람에게 이 정보를 가져와서 `이 보물을 20명이 보고 있습니다.`라고 알림을 준다.
+```
+
+예를 들면 위에서 `Sink`를 설명했는데 `ProductFetchStreamProcessor`내에서 처리를 하고 다른 토픽으로 `publish`를 하는 것이다.
+
+기존 코드 대신에 아래처럼 처리하면 된다.
+
+```kotlin
+@Bean
+fun productFetchCountStreamBySink(builder: StreamsBuilder): KStream<String, Long> {
+    val stream = builder.stream(
+        KafkaStreamTopic.PRODUCT_FETCH.topic,
+        Consumed.with(Serdes.String(), Serdes.String()),
+    )
+
+    val countTable = stream
+        .groupByKey()
+        .count(
+            Materialized.`as`<String, Long, KeyValueStore<Bytes, ByteArray>>(
+                KafkaStreamTopic.PRODUCT_FETCH.aggregationKey,
+            ).withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.Long()),
+        )
+
+    val resultStream = countTable.toStream()
+    resultStream.to(
+        "basquiat.product.view.count",
+        Produced.with(Serdes.String(), Serdes.Long())
+    )
+    return resultStream
+}
+```
+물론 이때 토픽 역시 미리 등록을 해야 한다는 것을 잊지 말자.
+
+아마도 이 방법이 최적화된 방법일 것이다.
+
+
+# 하지만 이건 전체 누적 조건이다.
+
+만일 일별로 묶어서 처리하고 싶은 경우가 있을 수 있다.
+
+이럴 때는 `windowedBy`를 통해서 이것을 처리가능하다.
+
+기존에 사용하는 녀석은 빈으로 등록하지 않도록 주석처리한다.
+
+```kotlin
+@Component
+class DailyProductFetchStreamProcessor {
+    @Bean
+    fun productFetchCountStream(builder: StreamsBuilder): KStream<String, Long> {
+        val stream =
+            builder.stream(
+                KafkaStreamTopic.PRODUCT_FETCH.topic,
+                Consumed.with(Serdes.String(), Serdes.String()),
+            )
+
+        val dailyCountBuilder =
+            stream
+                .groupByKey()
+                .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofDays(1)))
+                .count(
+                    Materialized
+                        .`as`<String, Long, WindowStore<Bytes, ByteArray>>(
+                            KafkaStreamTopic.PRODUCT_FETCH.aggregationKey,
+                        ).withKeySerde(Serdes.String())
+                        .withValueSerde(Serdes.Long()),
+                )
+
+        return dailyCountBuilder
+            .toStream()
+            .map { windowedKey, value ->
+                KeyValue(windowedKey.key(), value)
+            }
+    }
+}
+```
+
+조회 조건도 변경된다.
+
+```kotlin
+@Service
+class StreamStateStoreQueryService(
+    private val factoryBean: StreamsBuilderFactoryBean,
+) {
+    private val log = logger<StreamStateStoreQueryService>()
+
+    private val defaultCount: Long = 0L
+
+    /**
+     *  상품의 실시간 조회수 가져오기
+     */
+    fun getProductViewCount(productId: String): Long {
+        val kafkaStreams = factoryBean.kafkaStreams ?: return defaultCount
+
+        // 어떤 이유로 State Store가 RUNNING이 아닐 때는 서비스가 중단되는 것을 막기 위해 기본값을 던지도록 한다.
+        if (kafkaStreams.state() != KafkaStreams.State.RUNNING) {
+            log.warn("Kafka Streams State : ${kafkaStreams.state()}")
+            return defaultCount
+        }
+
+        return try {
+            val store =
+                kafkaStreams.store(
+                    StoreQueryParameters.fromNameAndType(
+                        KafkaStreamTopic.PRODUCT_FETCH.aggregationKey,
+                        QueryableStoreTypes.keyValueStore<String, Long>(),
+                    ),
+                )
+            store.get(productId) ?: defaultCount
+        } catch (e: InvalidStateStoreException) {
+            // 리밸런싱 중이거나 상태가 변했을 때 잡아서 로그만 남기고 기본 값을 던지도록 한다.
+            log.error("Kafka Streams Status is REBALANCING or Change: ${e.message}")
+            defaultCount
+        }
+    }
+
+    fun getTodayProductViewCount(productId: String): Long {
+        val kafkaStreams = factoryBean.kafkaStreams ?: return defaultCount
+        if (kafkaStreams.state() != KafkaStreams.State.RUNNING) return defaultCount
+
+        return try {
+            // 1. WindowStore 타입으로 가져오기
+            val store =
+                kafkaStreams.store(
+                    StoreQueryParameters.fromNameAndType(
+                        KafkaStreamTopic.PRODUCT_FETCH.aggregationKey,
+                        QueryableStoreTypes.windowStore<String, Long>(),
+                    ),
+                )
+
+            val now = Instant.now()
+            val startOfDay =
+                LocalDateTime
+                    .of(LocalDate.now(), LocalTime.MIN)
+                    .atZone(ZoneId.systemDefault())
+                    .toInstant()
+
+            val iterator = store.backwardFetch(productId, startOfDay, now)
+
+            if (iterator.hasNext()) {
+                iterator.next().value
+            } else {
+                defaultCount
+            }
+        } catch (e: Exception) {
+            defaultCount
+        }
+    }
+}
+```
+
+핸들러에서도 새로 만든 메소드를 호출하도록 변경하자.
 
 ```kotlin
 @Service
 class FetchProductHandler(
     private val productService: ProductService,
+    private val kafkaStreamPublisher: KafkaStreamPublisher,
+    private val streamStateStoreQueryService: StreamStateStoreQueryService,
 ) {
     fun execute(request: FetchProduct): FetchProductResponse {
         val productId = request.productId
+
+        // 스트림즈로 publish하면 앞서 정의한 Processor가 데이터를 처리한다.
+        kafkaStreamPublisher.publish(
+            kafkaStreamTopic = KafkaStreamTopic.PRODUCT_FETCH,
+            key = productId.toString(),
+            message = "PRODUCT_VIEW_COUNT_EVENT",
+        )
+
         val product =
             productService
                 .findByIdForCache(productId)
-        return FetchProductResponse(product = product)
-    }
-}
-```
-다음과 같이 `Responder`쪽에서 이 메소드를 사용하도록 한다.
 
-다만 고려해 볼 것은 주문이 들어왔을 때 해당 상품의 재고가 차감될 수 있다.
-
-그래서 주문을 받아서 처리하는 `Responsder`에서는 캐시에 저장되어 있는 상품 정보를 `Evict`할 필요가 있다.
-
-
-```kotlin
-@Service
-class PlaceOrderHandler(
-    private val productService: ProductService,
-    private val orderService: OrderService,
-) {
-    @Transactional
-    @DistributedLock(key = "#request.productId", waitTime = 10L, leaseTime = 3L, useWatchdog = true)
-    @CacheEvict(value = ["product"], key = "#request.productId") // 핵심: 낡은 캐시를 파괴한다!
-    fun execute(request: PlaceOrder): PlaceOrderResponse {
-        val (productId, quantity) = request
-
-        val product =
-            productService
-                .findByIdOrThrow(productId, "해당 보물을 찾을 수 없습니다. 보물 아이디: $productId")
-        if (product.quantity < quantity) unableToJoin("재고가 부족하여 해적단에 합류할 수 없습니다!")
-        product.quantity -= quantity
-        val entity =
-            Order(
-                product = product,
-                quantity = quantity,
-                status = OrderStatus.COMPLETED,
-            )
-        val completeOrder = orderService.create(entity)
-        return PlaceOrderResponse(orderId = completeOrder.id)
+        // 조회 이후 state store를 통해서 조회수를 가져온다.
+        val viewCount = streamStateStoreQueryService.getTodayProductViewCount(productId.toString())
+        return FetchProductResponse(product = product.withViewCount(viewCount))
     }
 }
 ```
 
+이 방식으로 사용하게 되면 몇가지 주의점이 있다.
 
-# 테스트
+`windowedBy`를 통해서 `WindowStore`를 쓰고 있다.
+
+그리고 우리는 하루를 기준으로 처리하도록 코드를 작성했다.
+
+이것은 세그먼트로 나눠서 작성을 하고 하루가 지나면 다시 `Window`를 만들기 때문에 데일리로 카운트를 작성하게 된다.
+
+그리고 이렇게 만들어진 경우에는 데이터가 `Retention Policy`에 의해 삭제가 된다.
+
+즉, 수명이 존재한다.
+
+따라서 하루가 지나면 이 정보를 DB에 넣어서 데일리로 데이터를 집계할 수 있도록 하는게 좋다.
+
+그렇다면 하루에 한번 돌때 이전의 `Window`정보를 가져와서 무언가를 수행하도록 작성를 해볼 생각이다.
+
+먼저 스케쥴을 한번 작성해 보자.
 
 ```kotlin
-@SpringBootTest
-@ActiveProfiles("local")
-@TestPropertySource(locations = ["classpath:application-local.yaml"])
-@Suppress("NonAsciiCharacters")
-class CacheTest
-    @Autowired
-    constructor(
-        private val fetchProductUsecase: FetchProductUsecase,
-    ) {
-        @Test
-        fun `Cache 테스트하기`() {
-            // given
-            val productId = 7L
+class DailyProductDBExporterProcessor : ContextualProcessor<Windowed<String>, Long, Void, Void>() {
+    private val log = logger<DailyProductDBExporterScheduler>()
 
-            // when
-            val requestCount = 50
-            val executorService = Executors.newFixedThreadPool(15)
-            val latch = CountDownLatch(requestCount)
+    override fun init(context: ProcessorContext<Void, Void>) {
+        super.init(context)
 
-            // When
-            for (i in 1..requestCount) {
-                executorService.submit {
-                    try {
-                        val response = fetchProductUsecase.execute(productId)
-                        println(objectToString(response))
-                    } catch (e: Exception) {
-                        println("해적단 합류 실패 원인: ${e.message}")
-                    } finally {
-                        latch.countDown()
-                    }
+        context().schedule(Duration.ofDays(1), PunctuationType.WALL_CLOCK_TIME) { timestamp ->
+            val store: WindowStore<String, Long> = context().getStateStore(KafkaStreamTopic.PRODUCT_FETCH.aggregationKey)
+
+            val startOfYesterday =
+                LocalDate
+                    .now()
+                    .minusDays(1)
+                    .atStartOfDay(ZoneId.systemDefault())
+                    .toInstant()
+
+            val endOfYesterday =
+                LocalDate
+                    .now()
+                    .atStartOfDay(ZoneId.systemDefault())
+                    .minusNanos(1)
+                    .toInstant()
+
+            store.fetchAll(startOfYesterday, endOfYesterday).use { iterator ->
+                iterator.forEach { entry ->
+                    // window의 entry를 통해서 저장된 상품 아이디 정보를 가져온다.
+                    val productId = entry.key.key()
+                    val viewCount = entry.value
+                    log.info("period: $startOfYesterday - $endOfYesterday")
+                    log.info("productId: $productId / viewCount: $viewCount")
+                    // TODO 집계 테이블에 넣는 로직을 실행하자.
                 }
             }
-            latch.await()
+            log.info("[Scheduler] 어제 저장된 Window Store 데이터 처리 완료")
         }
     }
-```
 
-이 코드를 테스트하게 되면 로그상에서 최초 한번 데이터를 조회하는 쿼리가 실행된 이후 쿼리가 더 이상 실행되지 않는 것을 확인할 수 있다.
-
-그리고 지금 `CacheType`에 보면 `ttl`을 1시간으로 잡아놨기 때문에 테스트를 다시 한번 실행하면 쿼리가 전혀 날아가지 않는다.
-
-하지만 응답값으로 캐시에 있는 정보를 불러와서 응답을 주는 것을 확인할 수 있다.
-
-`Redis`편에서 만일 `Redis Insight`를 설치해서 모니터링 하게 되면 `onepiece:product:7`가 생성되고 
-
-```json
-{
-"id" : 7,
-"name" : "니코 로빈 포네그리프 사본",
-"price" : 870000,
-"quantity" : 100,
-"createdAt" : "2026-02-12T13:40:48.593326",
-"updatedAt" : "2026-02-12T13:40:48.593326"
+    /**
+     * 아무것도 안할 것이기 때문에 그냥 패스
+     */
+    override fun process(record: Record<Windowed<String>, Long>?) {
+        return
+    }
 }
 ```
+우리가 만든 `DailyProductFetchStreamProcessor`은 하루를 기준으로 만들도록 처리했다.
 
-아래와 같은 캐시 데이터를 확인할 수 있다.
+```kotlin
+@Component
+class DailyProductFetchStreamProcessor {
+    @Bean
+    fun productFetchCountStream(builder: StreamsBuilder): KStream<String, Long> {
+        val stream =
+            builder.stream(
+                KafkaStreamTopic.PRODUCT_FETCH.topic,
+                Consumed.with(Serdes.String(), Serdes.String()),
+            )
 
-만일 1시간내에 주문이 들어오게 되면 어떻게 될까?
+        val dailyCountStream =
+            stream
+                .groupByKey()
+                .windowedBy(
+                    TimeWindows
+                        .ofSizeWithNoGrace(Duration.ofDays(1))
+                        .advanceBy(Duration.ofDays(1)),
+                ).count(
+                    Materialized
+                        .`as`<String, Long, WindowStore<Bytes, ByteArray>>(
+                            KafkaStreamTopic.PRODUCT_FETCH.aggregationKey,
+                        ).withKeySerde(Serdes.String())
+                        .withValueSerde(Serdes.Long()),
+                ).toStream()
 
-스웨거를 통해서 주문을 해보자.
+        dailyCountStream.process(
+            ProcessorSupplier { DailyProductDBExporterProcessor() },
+            KafkaStreamTopic.PRODUCT_FETCH.aggregationKey,
+        )
 
-그러면 바로 `Redis Insight`에서 해당 키로 잡힌 캐시 정보가 사라지게 되는 것을 볼 수 있다.
+        return dailyCountStream.map { windowedKey, value ->
+            KeyValue(windowedKey.key(), value)
+        }
+    }
+}
+```
+위 코드에서 `ProcessorSupplier`에 스케쥴 프로세서를 넣어두도록 하면 된다.
 
-그리고 다시 스웨거를 통해서 해당 상품을 조회하면 다시 쿼리가 날아가고 계속 조회를 하면 캐시가 사자리기 전까지 쿼리 로그가 찍히지 않는 것을 확인할 수 있다.
+사실 여기에는 몇가지 문제가 있다.
 
-# 고민해 볼 사항
+스케쥴 프로세서 내부에 `context().schedule(Duration.ofDays(1), PunctuationType.WALL_CLOCK_TIME) { `이런 부분이 있는데 이것은 시간상 문제를 보인다.
 
-캐시를 적용하면 좋지만 그냥 손놓고 있으면 안된다.
+예를 들면 서버가 실행된 시점으로부터 하루이기 때문이다.
 
-실제로 `Redis Cache`에 쌓인 데이터가 가득 차서 문제가 발생한 경험이 있기 때문이다.
+그래서 `Duration.ofDays(1)`을 초단위로 30초를 두고 실행이 되는 것을 보도록 하자.
 
-그 때 해당 문제를 해결할떄 찾아본 것 중 가장 현실적이었던 방식은 `allkeys-lru`이다.
+현재는 어제 날짜로 생성된 정보가 없기 때문에 그냥 완료이후 로그만 찍힐 것이다.
 
-LRU (Least Recently Used), 결국 오랫동안 사용되지 않은 키를 삭제해서 문제를 해결했다.
+그러면 차라리 한시간을 두고 스케쥴이 돌도록 하자.
 
-여러 방법이 있겠지만 상황에 따라서 결정이 될 건데 하고 싶은 말은 그냥 캐시 잘돌아가니 문제없다고 하면 안된다.
+그리고 보완을 해보자.
 
-모니터링을 해야 한다.
+실제로 카프카와는 별개로 스케쥴 관련 이런 문제를 경험한 적이 있기 때문이다.
 
-# Next Step
+```kotlin
+class DailyProductDBExporterProcessor : ContextualProcessor<Windowed<String>, Long, Void, Void>() {
+    private val log = logger<DailyProductDBExporterProcessor>()
 
-[번외 - Kafka Stream](https://github.com/basquiat78/spring-boot-message-brokers/tree/07-kafka-stream)
+    // 정산 여부를 위한 변수 설정
+    private var lastExportedDate: LocalDate? = null
+
+    override fun init(context: ProcessorContext<Void, Void>) {
+        super.init(context)
+
+//        context().schedule(Duration.ofDays(1), PunctuationType.WALL_CLOCK_TIME) {
+        context().schedule(Duration.ofMinutes(30), PunctuationType.WALL_CLOCK_TIME) { timestamp ->
+            val now = LocalDateTime.now()
+            val today = now.toLocalDate()
+
+            // 만일 자정이거나 오전 1시가 아니라면 실행하지 않는다.
+            if (now.hour !in 0..1) return@schedule
+            // 마지막 정산 날짜가 오늘이다? 그러면 중복 실행 방지를 위해 실행하지 않는다.
+            if (lastExportedDate == today) return@schedule
+
+            val store: WindowStore<String, Long> = context().getStateStore(KafkaStreamTopic.PRODUCT_FETCH.aggregationKey)
+
+            val startOfYesterday =
+                LocalDate
+                    .now()
+                    .minusDays(1)
+                    .atStartOfDay(ZoneId.systemDefault())
+                    .toInstant()
+
+            val endOfYesterday =
+                LocalDate
+                    .now()
+                    .atStartOfDay(ZoneId.systemDefault())
+                    .minusNanos(1)
+                    .toInstant()
+
+            store.fetchAll(startOfYesterday, endOfYesterday).use { iterator ->
+                iterator.forEach { entry ->
+                    // window의 entry를 통해서 저장된 상품 아이디 정보를 가져온다.
+                    val productId = entry.key.key()
+                    val viewCount = entry.value
+                    log.info("period: $startOfYesterday - $endOfYesterday")
+                    log.info("productId: $productId / viewCount: $viewCount")
+                    // TODO 집계 테이블에 넣는 로직을 실행하자.
+                }
+            }
+            // 실행이 완료되면 마지막 정산 날짜를 오늘로 세팅한다.
+            lastExportedDate = today
+            log.info("[Scheduler] 어제 저장된 Window Store 데이터 처리 완료")
+        }
+    }
+
+    /**
+     * 아무것도 안할 것이기 때문에 그냥 패스
+     */
+    override fun process(record: Record<Windowed<String>, Long>?) {
+        return
+    }
+}
+```
+나는 일단 30분마다 스케쥴을 돌고 조건이 맞으면 집계를 하도록 처리를 했다.
+
+물론 이 방식이 좋을지는 잘 모르겠다. 컨슈머가 여러대라면 이 방법도 그다지 좋아 보이진 않는다.
+
+하지만 이런 방식도 적용할 수 있다는 것을 보여주고 싶었다.
+
+
+# At a Glance
+
+`RabbitMQ`에서 `NATS` 그리고 `Kafka Streams`을 이용한 방법등을 알아보았다.
+
+끗!

@@ -1,6 +1,5 @@
 package io.basquiat.global.broker.kafka
 
-import io.basquiat.global.annotations.ConditionalOnKafka
 import io.basquiat.global.broker.common.MessageHandler
 import io.basquiat.global.utils.logger
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -13,10 +12,9 @@ import org.springframework.kafka.retrytopic.TopicSuffixingStrategy
 import org.springframework.kafka.support.Acknowledgment
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.handler.annotation.Header
-import org.springframework.stereotype.Component
 
-@Component
-@ConditionalOnKafka
+// @Component
+// @ConditionalOnKafka
 class KafkaEventSubscriber(
     private val handlers: List<MessageHandler<*>>,
 ) {
