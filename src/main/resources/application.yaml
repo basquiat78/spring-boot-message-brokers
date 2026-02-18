@@ -11,6 +11,6 @@ server:
 
 app:
   messaging:
-    use-amqp: true
+    use-amqp: false
     use-redis: false
     use-kafka: true
