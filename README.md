@@ -821,3 +821,7 @@ class DailyProductDBExporterProcessor : ContextualProcessor<Windowed<String>, Lo
 `RabbitMQ`에서 `NATS` 그리고 `Kafka Streams`을 이용한 방법등을 알아보았다.
 
 끗!
+
+# Next Step
+
+[Reids Sentinel Distributed Lock](https://github.com/basquiat78/spring-boot-message-brokers/tree/08-redis-sentienl-rlock)
