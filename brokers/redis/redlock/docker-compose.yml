@@ -1,0 +1,24 @@
+services:
+  # 독립된 마스터 1
+  redlock-node-1:
+    image: redis:latest
+    container_name: redlock-node-1
+    ports:
+      - "6400:6379"
+    command: redis-server --requirepass basquiat
+
+  # 독립된 마스터 2
+  redlock-node-2:
+    image: redis:latest
+    container_name: redlock-node-2
+    ports:
+      - "6401:6379"
+    command: redis-server --requirepass basquiat
+
+  # 독립된 마스터 3
+  redlock-node-3:
+    image: redis:latest
+    container_name: redlock-node-3
+    ports:
+      - "6402:6379"
+    command: redis-server --requirepass basquiat

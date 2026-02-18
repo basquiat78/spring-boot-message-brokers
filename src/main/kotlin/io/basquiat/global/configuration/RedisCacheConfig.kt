@@ -6,6 +6,8 @@ import io.basquiat.global.cache.CacheType
 import io.basquiat.global.utils.logger
 import io.basquiat.global.utils.mapper
 import io.basquiat.global.utils.notFound
+import org.redisson.api.RedissonClient
+import org.redisson.spring.data.connection.RedissonConnectionFactory
 import org.springframework.cache.Cache
 import org.springframework.cache.annotation.CachingConfigurer
 import org.springframework.cache.annotation.EnableCaching
@@ -15,16 +17,20 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.data.redis.cache.RedisCacheConfiguration
 import org.springframework.data.redis.cache.RedisCacheManager
-import org.springframework.data.redis.connection.RedisConnectionFactory
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer
 import org.springframework.data.redis.serializer.RedisSerializationContext
 import org.springframework.data.redis.serializer.StringRedisSerializer
 
 @Configuration
 @EnableCaching
-class RedisCacheConfig : CachingConfigurer {
+class RedisCacheConfig(
+    private val redissonClients: List<RedissonClient>,
+) : CachingConfigurer {
     @Bean
-    fun redisCacheManager(connectionFactory: RedisConnectionFactory): RedisCacheManager {
+    fun redisCacheManager(): RedisCacheManager {
+        // 첫번째 클라이언트에서 connectionFactory를 가져온다.
+        val connectionFactory = RedissonConnectionFactory(redissonClients[0])
+
         val cacheConfigs =
             CacheType.entries.associate { type ->
                 type.cacheName to createCacheConfiguration(type)

@@ -63,27 +63,27 @@ spring:
           multiplier: 2.0
           max-interval: 10000ms
         default-requeue-rejected: false
-  data:
-    redis:
-      password:
-      database: 0
-      timeout: 2000
-      sentinel:
-        # sentinel.conf 에서 정한 alias, 별칭
-        master: basquiat
-        # 메인 노드를 첫번쨰로 두고
-        # 나머지 replica를 배열로 설정한다.
-        # 포트는 당연히 docker-compose.yml에 설정한 그 외부 포트로 설정한다.
-        # 이 부분 역시 개인에 맞춰서 수정해야 한다.
-        nodes:
-          - 127.0.0.1:26400
-          - 127.0.0.1:26401
-          - 127.0.0.1:26402
-      lettuce:
-        pool:
-          max-active: 20
-          max-idle: 10
-          min-idle: 5
+#  data:
+#    redis:
+#      password:
+#      database: 0
+#      timeout: 2000
+#      sentinel:
+#        # sentinel.conf 에서 정한 alias, 별칭
+#        master: basquiat
+#        # 메인 노드를 첫번쨰로 두고
+#        # 나머지 replica를 배열로 설정한다.
+#        # 포트는 당연히 docker-compose.yml에 설정한 그 외부 포트로 설정한다.
+#        # 이 부분 역시 개인에 맞춰서 수정해야 한다.
+#        nodes:
+#          - 127.0.0.1:26400
+#          - 127.0.0.1:26401
+#          - 127.0.0.1:26402
+#      lettuce:
+#        pool:
+#          max-active: 20
+#          max-idle: 10
+#          min-idle: 5
   kafka:
     bootstrap-servers: localhost:9094
     listener:
@@ -167,6 +167,17 @@ redisson:
   protocol: "redis://"
   # 상용이나 ssl을 적용해야 한다면
   # protocol: "rediss://"
+
+redlock:
+  nodes:
+    - address: "${redisson.protocol}127.0.0.1:6400"
+      password: basquiat
+    - address: "${redisson.protocol}127.0.0.1:6401"
+      password: basquiat
+    - address: "${redisson.protocol}127.0.0.1:6402"
+      password: basquiat
+  database: 0
+  timeout: 3000
 
 nats:
   server: nats://localhost:4222

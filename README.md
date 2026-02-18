@@ -1,405 +1,365 @@
-# Redis Sentinel Setup
+# Redis Redlock Setup
 
-지금까지 잘 진행해 왔다면 이제는 `Redis`를 `Sentinel`로 구성을 해보자.
+`Redis`에서 `Redlock`은 센티넬 구성이 아닌 각기 다른 독립된 `Redis`을 통해서 락을 거는 것이다.
 
-기존에 도커 컴포즈로 실행한 `Redis`는 `docker compose down`으로 내린다.
+일반적으로 3대 이상으로 구성된 각기 다른 복제본이 아닌 독립된 마스터 레벨의 `Redis`를 통해서 락을 거는 방식이다.
 
-그리고 `redis`폴더에 `cluster`폴더내에 관련 설정 파일을 만들어 두었다.
+위 설명대로라면 의문이 든다.
 
-뭔가 복잡한 거 같지만 `master node`를 앞에 두고 2개의 `replica`가 `master node`를 바라보게 하는 것이다.
+_왜 독립된 각각의 `Redis`를 통해서 분산락을 구현해야 하는거지??_
 
-이때 포트 정보는 기존에 로컬에서 돌고 있는 `Redis`와 충돌나지 않도록 기존에 진행해오면서 사용한 포트 6400을 그대로 사용하기 위해 세팅을 해 논 상태이다.
+사실 나도 그런 의문이 들지만 정교하게 분산락을 거는건가라고만 생각을 했다.
 
-이것은 본인의 로컬에 따라서 기존 포트인 6379로 세팅을 해도 무방하다.
+다음과 같은 이유로 이런 방식을 택한다고 한다.
 
-`sentinel.conf`에는 설정 정보에 상세한 주석을 달아놨으니 해당 정보를 참조하면 된다.
+- 과반수(Quorum): 과반수 이상의 노드에서 승인을 얻어야 락이 유효함을 보장한다.
+- 원자성: 시스템 장애 상황에서도 락을 원자적으로 보장한다.
 
-도커 컴포즈를 통해 센티넬을 구성을 띄우고 다음 명령어를 통해서 제대로 떠 있는지 확인해 보자.
+이것은 단일 노드에서 발생하는 `SPOF`가 없고 하나의 노드가 죽어도 분산락에 영향을 주지 않는다.
+따라서 안정적인 분산락을 구현한다는 것이다.
+
+그러면 이것이 어떻게 동작하는지도 알아봐야 한다.
+
+# RedLock 프로세스
+
+1. Time Log (시간 기록)
+    - 락 회득전에 먼저 시간을 기록한다.
+2. 순차적 획득 시도
+   - 3대 (또는 그 이상)의 모든 노드에 순차적으로 락 획득을 요청
+   - 이때 각 요청의 Timeout은 매우 짧게 설정한다
+   - 한 대가 죽어있더라도 락 획득 프로세스가 멈추지 않게 한다
+3. 과반수 체크
+   - 3대 중 2대 이상에서 락을 획득 (홀수대 중 2배수 짝수)
+   - 락 획득에 걸린 총 시간이 락 유효 시간보다 짧은지 체크
+4. 최종 유효 시간 계산
+    - 락을 사용할 수 있는 시간은 [처음 설정한 유효 시간]에서 [락 획득에 걸린 총 시간]을 뺀 시간
+5. 실패 시 해제
+   - 과반수 획득에 실패했다면, 락을 획득했던 모든 노드에 해제(Unlock) 요청을 보낸다.
 
 
-```shell
-$>docker exec -it redis-sentinel-1 redis-cli -p 26379 sentinel master basquiat
-$>docker exec -it redis-sentinel-2 redis-cli -p 26379 sentinel master basquiat
+프로세스만 보면 몇 가지 드는 생각이 든다.
 
-1) "name"
- 2) "basquiat"
- 3) "ip"
- 4) "redis-master"
- 5) "port"
- 6) "6379"
- 7) "runid"
- 8) "216426c2ed70931e9ecedc706bfe878573f6e3c9"
- 9) "flags"
-10) "master"
-11) "link-pending-commands"
-12) "0"
-13) "link-refcount"
-14) "1"
-15) "last-ping-sent"
-16) "0"
-17) "last-ok-ping-reply"
-18) "592"
-19) "last-ping-reply"
-20) "592"
-21) "down-after-milliseconds"
-22) "5000"
-23) "info-refresh"
-24) "6656"
-25) "role-reported"
-26) "master"
-27) "role-reported-time"
-28) "56837"
-29) "config-epoch"
-30) "0"
-31) "num-slaves"
-32) "2"
-33) "num-other-sentinels"
-34) "2"
-35) "quorum"
-36) "2"
-37) "failover-timeout"
-38) "60000"
-39) "parallel-syncs"
-40) "1"
+~~락을 획득하는데 무슨 과반수를 얻어야 하는거야????~~
 
-What's next:
-    Try Docker Debug for seamless, persistent debugging tools in any container or image → docker debug redis-sentinel-1
-    Learn more at https://docs.docker.com/go/debug-cli/
-medium@mediumui-MacBookPro cluster % docker exec -it redis-sentinel-2 redis-cli -p 26379 sentinel master basquiat
- 1) "name"
- 2) "basquiat"
- 3) "ip"
- 4) "redis-master"
- 5) "port"
- 6) "6379"
- 7) "runid"
- 8) "216426c2ed70931e9ecedc706bfe878573f6e3c9"
- 9) "flags"
-10) "master"
-11) "link-pending-commands"
-12) "0"
-13) "link-refcount"
-14) "1"
-15) "last-ping-sent"
-16) "0"
-17) "last-ok-ping-reply"
-18) "223"
-19) "last-ping-reply"
-20) "223"
-21) "down-after-milliseconds"
-22) "5000"
-23) "info-refresh"
-24) "5516"
-25) "role-reported"
-26) "master"
-27) "role-reported-time"
-28) "65661"
-29) "config-epoch"
-30) "0"
-31) "num-slaves"
-32) "2"
-33) "num-other-sentinels"
-34) "2"
-35) "quorum"
-36) "2"
-37) "failover-timeout"
-38) "60000"
-39) "parallel-syncs"
-40) "1"
-```
-각 `replica`설정값들이 제대로 뜨는 것을 확인하면 센티넬 구성은 준비가 되었다.
+~~헤드락 아니~~ 분산락을 거는데 진심이네?
 
-# Sentinel 구성을 왜 한겨??
+하지만 `Redis`를 3대 이상 독립적으로 운영해야 한다는 단점과 아무래도 속도를 조금은 포기해야 하는 단점이 보인다.
 
-보통 센티넬 구성은 `Redis`를 `in-Memory DB`로 사용하기 위해 구성하는 경우이다.
+속도를 조금은 포기하고 정말 정밀한 분산락을 요구하는 시스템이라면 고려해 볼 만한 방식이다라는 것을 먼저 언급하고 진행을 해보자.
 
-그래서 한대로 구성한 `Redis`가 문제가 생기면 벌어질 참사를 막기 위해 사용하게 된다.
+# 3대의 독립된 Redis를 띄워보자.
 
-한대의 마스터 노드가 메인으로 사용되면서 데이터를 다른 레플리카 노드와 동기화를 하게 된다.
+현재 `broker > redis > redlock` 폴더내의 `docker-compose.yml`에 설정을 해 놨다.
 
-그러다가 마스터 노드가 어떤 이유로 장애가 발생하게 되면 빠르게 레플리카중 한대를 마스터로 승격시킨다.
+보안을 중요하게 생각한다는 마인드로 `command: redis-server --requirepass basquiat`을 통해 비밀번호를 `basquiat`로 설정한 것을 확인할 수 있다.
 
-근데 이렇게 구성하게 되면 우리가 기존에 `RLock`을 이용한 분산락에도 문제가 발생하게 된다.
+기존에 띄운 정보를 다 내리고 이것을 실행하자.
 
-이유가 뭘까?
+# 설정 변경
 
-# Master Node가 바꼈네????
+기존 방식이 바뀌기 떄문에 다음과 같이 도커 컴포즈로 띄운 정보를 설정을 한다.
 
-그렇다.
-
-문제가 없이 돌아간다면 마스터로 설정한 노드가 변경될 일이 없다.
-
-그리고 지금은 로컬이기 때문에 사실 마스터가 변경된다 해도 `IP`는 그대로 일 수 있다.
-
-하지만 실제 운영상에서는 `IP`가 그대로일까?
-
-마스터 노드가 바뀌게 되면 분산락도 바라보는 노드가 변경되어야 한다.
-
-하지만 지금 방식이라면 문제가 생긴 노드를 계속 바라보게 될텐데 이것 역시 참사가 발생한다.
-
-그래서 세팅 자체도 바뀌게 된다.
-
-기존 `yaml`을 먼저 변경한다.
+그리고 `spring:data`밑에 있는 기존 설정은 전부 주석처리를 해야 한다.
 
 ```yaml
-spring:
-  data:
-    redis:
-      password:
-      database: 0
-      timeout: 2000
-      sentinel:
-        # sentinel.conf 에서 정한 alias, 별칭
-        master: basquiat
-        # 메인 노드를 첫번쨰로 두고
-        # 나머지 replica를 배열로 설정한다.
-        # 포트는 당연히 docker-compose.yml에 설정한 그 외부 포트로 설정한다.
-        # 이 부분 역시 개인에 맞춰서 수정해야 한다.
-        nodes:
-          - 127.0.0.1:26400
-          - 127.0.0.1:26401
-          - 127.0.0.1:26402
-      lettuce:
-        pool:
-          max-active: 20
-          max-idle: 10
-          min-idle: 5
+redisson:
+  protocol: "redis://"
+  # 상용이나 ssl을 적용해야 한다면
+  # protocol: "rediss://"
+
+redlock:
+  nodes:
+    - address: "${redisson.protocol}127.0.0.1:6400"
+      password: basquiat
+    - address: "${redisson.protocol}127.0.0.1:6401"
+      password: basquiat
+    - address: "${redisson.protocol}127.0.0.1:6402"
+      password: basquiat
+  database: 0
+  timeout: 3000
 ```
 
-기존 `ReddisonConfig`는 아래와 같다.
+그리고 이것을 매핑할 객체를 하나 만들자.
+
+```kotlin
+@ConfigurationProperties(prefix = "redlock")
+data class RedlockProperties
+@ConstructorBinding
+constructor(
+    val nodes: List<RedlockNode>,
+    val database: Int = 0,
+    val timeout: Int = 3000,
+)
+
+data class RedlockNode(
+    val address: String = "",
+    val password: String? = null,
+)
+```
+
+이제는 기존의 싱글로 띄운 `ReddisonConfig`는 다음과 같이 변경되어야 한다.
 
 ```kotlin
 @Configuration
 class RedissonConfig(
-    @Value($$"${spring.data.redis.host:localhost}")
-    private val redisHost: String,
-    @Value($$"${spring.data.redis.port:6379}")
-    private val redisPort: Int,
-    @Value($$"${spring.data.redis.password:}")
-    private val redisPassword: String?,
-    @Value($$"${spring.data.redis.database:0}")
-    private val redisDatabase: Int,
-    @Value($$"${redisson.protocol:redis://}")
-    private val protocol: String,
+    private val props: RedlockProperties,
 ) {
     @Bean
-    fun redissonClient(): RedissonClient {
-        val config = Config()
+    fun redissonClients(): List<RedissonClient> =
+        props.nodes.map { node ->
+            val config = Config()
+            val redissonMapper = mapper.copy()
 
-        val redissonMapper = mapper.copy()
-
-        config.apply {
-            if (!redisPassword.isNullOrBlank()) {
-                password = redisPassword
+            config.apply {
+                if (!node.password.isNullOrBlank()) {
+                    password = node.password
+                }
+                nettyThreads = 16
+                codec = TypedJsonJacksonCodec(Any::class.java, redissonMapper)
             }
-            nettyThreads = 16
-            codec = TypedJsonJacksonCodec(Any::class.java, redissonMapper)
-        }
 
-        config.useSingleServer().apply {
-            address = "$protocol$redisHost:$redisPort"
-            database = redisDatabase
-            timeout = 3000
-            connectTimeout = 5000
-            connectionMinimumIdleSize = 10
-            connectionPoolSize = 15
-            retryAttempts = 3
-            retryDelay = ConstantDelay(Duration.ofMillis(100))
+            config.useSingleServer().apply {
+                address = node.address
+                database = props.database
+                timeout = props.timeout
+                connectTimeout = 5000
+                connectionMinimumIdleSize = 10
+                connectionPoolSize = 15
+                retryAttempts = 3
+                retryDelay = ConstantDelay(Duration.ofMillis(100))
+            }
+
+            try {
+                Redisson.create(config)
+            } catch (e: Exception) {
+                throw RuntimeException("Redisson 연결 실패! 주소: $node.address, 원인: ${e.message}", e)
+            }
         }
-        return try {
-            Redisson.create(config)
-        } catch (e: Exception) {
-            throw RuntimeException("Redisson 연결 실패! 주소: redis://$redisHost:$redisPort, 원인: ${e.message}", e)
-        }
-    }
 }
 ```
-이것은 기존 방식인데 보면 알겠지만 `useSingleServer`를 사용하고 있다.
+각각의 독립된 `Redis`의 클라이언트를 리스트로 만들어서 빈으로 등록한다.
 
-이제는 현행에 맞춰서 설정한다.
+이제는 `RedisCacheConfig`에도 영향을 준다.
+
+따라서 아래와 같이 `RedisCacheConfig`를 변경한다.
+
+빈으로 등록한 클라인트 리스트에서 첫번째 `Redis` 노드만 캐시로 사용한다.
 
 ```kotlin
+@file:Suppress("DEPRECATION")
 @Configuration
-class RedissonConfig(
-    @Value($$"${spring.data.redis.sentinel.master:basquiat}")
-    private val masterName: String,
-    @Value($$"${spring.data.redis.sentinel.nodes:127.0.0.1:26400}")
-    private val sentinelNodes: List<String>,
-    @Value($$"${spring.data.redis.password:}")
-    private val redisPassword: String?,
-    @Value($$"${spring.data.redis.database:0}")
-    private val redisDatabase: Int,
-) {
+@EnableCaching
+class RedisCacheConfig(
+    private val redissonClients: List<RedissonClient>,
+) : CachingConfigurer {
     @Bean
-    fun redissonClient(): RedissonClient {
-        val config = Config()
-        val redissonMapper = mapper.copy()
+    fun redisCacheManager(): RedisCacheManager {
+        // 첫번째 클라이언트에서 connectionFactory를 가져온다.
+        val connectionFactory = RedissonConnectionFactory(redissonClients[0])
 
-        config.apply {
-            if (!redisPassword.isNullOrBlank()) {
-                password = redisPassword
-            }
-            nettyThreads = 16
-            codec = TypedJsonJacksonCodec(Any::class.java, redissonMapper)
-        }
-
-        // useSingleServer 대신 useSentinelServers을 사용하자.
-        config.useSentinelServers().apply {
-            setMasterName(masterName)
-
-            sentinelNodes.forEach { node ->
-                addSentinelAddress("redis://$node")
+        val cacheConfigs =
+            CacheType.entries.associate { type ->
+                type.cacheName to createCacheConfiguration(type)
             }
 
-            setDatabase(redisDatabase)
+        val defaultConfig =
+            cacheConfigs[CacheType.DEFAULT.cacheName]
+                ?: notFound("기본 캐시 설정(DEFAULT)이 Enum에 정의되지 않았습니다.")
 
-            setTimeout(3000)
-            setConnectTimeout(5000)
-            setMasterConnectionMinimumIdleSize(10)
-            setMasterConnectionPoolSize(15)
-            setSlaveConnectionMinimumIdleSize(10)
-            setSlaveConnectionPoolSize(15)
-
-            retryAttempts = 3
-            retryDelay = ConstantDelay(Duration.ofMillis(100))
-        }
-
-        return try {
-            Redisson.create(config)
-        } catch (e: Exception) {
-            throw RuntimeException("Redisson 센티넬 연결 실패! 마스터: $masterName, 원인: ${e.message}", e)
-        }
+        return RedisCacheManager
+            .builder(connectionFactory)
+            .cacheDefaults(defaultConfig)
+            .withInitialCacheConfigurations(cacheConfigs)
+            .build()
     }
-}
-```
 
-기존의 우리가 작업한 `Aspect`는 딱히 바꿀 필요는 없다.
-
-다만 지금 상태로는 몇가지 문제가 있는데 현재 환경인 `macOs`에서는 `redis-master`에 대한 `dns`에러가 발생한다.
-
-그래서 다음과 같이
-
-```shell
-$> sudo vi /etc/hosts
-
-##
-# Host Database
-#
-# localhost is used to configure the loopback interface
-# when the system is booting.  Do not change this entry.
-##
-127.0.0.1       localhost
-127.0.0.1       redis-master
-255.255.255.255 broadcasthost
-::1             localhost
-```
-다음과 같이 설정을 추가한다.
-
-하지만 `netty`에서 계속 외부의 `IP`를 통해서 무언가를 처리할려고 한다.
-
-```kotlin
-@Configuration
-class RedissonConfig(
-    @Value($$"${spring.data.redis.sentinel.master:basquiat}")
-    private val masterAlias: String,
-    @Value($$"${spring.data.redis.sentinel.nodes:127.0.0.1:26400}")
-    private val sentinelNodes: List<String>,
-    @Value($$"${spring.data.redis.password:}")
-    private val redisPassword: String?,
-    @Value($$"${spring.data.redis.database:0}")
-    private val redisDatabase: Int,
-) {
-    @Bean
-    fun redissonClient(): RedissonClient {
-        println("$masterAlias / $sentinelNodes")
-
-        val config = Config()
-        val redissonMapper = mapper.copy()
-
-        config.apply {
-            if (!redisPassword.isNullOrBlank()) {
-                password = redisPassword
-            }
-            nettyThreads = 16
-            codec = TypedJsonJacksonCodec(Any::class.java, redissonMapper)
-        }
-
-        // useSingleServer 대신 useSentinelServers을 사용하자.
-        config.useSentinelServers().apply {
-            setMasterName(masterAlias)
-
-            sentinelNodes.forEach { node ->
-                addSentinelAddress("redis://$node")
-            }
-
-            setDatabase(redisDatabase)
-
-            // redis에서 센티널 노드 리스트를 확인하지 않도록 false 처리한다.
-            setCheckSentinelsList(false)
-            setNatMapper(
-                object : NatMapper {
-                    override fun map(address: RedisURI): RedisURI {
-                        // master-replica 도커 내부 포트
-                        if (address.port == 6379) {
-                            return RedisURI(address.scheme, "127.0.0.1", 6379)
-                        }
-                        // 모든 걸 무시하고 원래 주소를 반환하도록 한다.
-                        return address
-                    }
-                },
+    private fun createCacheConfiguration(type: CacheType): RedisCacheConfiguration {
+        val serializer = Jackson2JsonRedisSerializer(mapper, type.clazz)
+        return RedisCacheConfiguration
+            .defaultCacheConfig()
+            .entryTtl(type.ttl)
+            .disableCachingNullValues()
+            .computePrefixWith { cacheName -> "onepiece:$cacheName:" }
+            .serializeKeysWith(
+                RedisSerializationContext.SerializationPair.fromSerializer(StringRedisSerializer()),
+            ).serializeValuesWith(
+                RedisSerializationContext.SerializationPair.fromSerializer(serializer),
             )
+    }
 
-            setTimeout(3000)
-            setConnectTimeout(5000)
-            setMasterConnectionMinimumIdleSize(10)
-            setMasterConnectionPoolSize(15)
-            setSlaveConnectionMinimumIdleSize(10)
-            setSlaveConnectionPoolSize(15)
+    /**
+     * 캐시 관련해서 redis가 어떤 이유로 장애가 발생하면 문제에 대한 로그만 남기도록 한다.
+     */
+    override fun errorHandler(): CacheErrorHandler =
+        object : SimpleCacheErrorHandler() {
+            override fun handleCacheGetError(
+                exception: RuntimeException,
+                cache: Cache,
+                key: Any,
+            ) {
+                logger<RedisCacheConfig>().error("Redis Get Error [Key: $key]: ${exception.message}")
+            }
 
-            retryAttempts = 3
-            retryDelay = ConstantDelay(Duration.ofMillis(100))
+            override fun handleCachePutError(
+                exception: RuntimeException,
+                cache: Cache,
+                key: Any,
+                value: Any?,
+            ) {
+                logger<RedisCacheConfig>().error("Redis Put Error [Key: $key]: ${exception.message}")
+            }
+
+            override fun handleCacheEvictError(
+                exception: RuntimeException,
+                cache: Cache,
+                key: Any,
+            ) {
+                logger<RedisCacheConfig>().error("Redis Evict Error [Key: $key]: ${exception.message}")
+            }
         }
+}
+```
+
+기존의 애노테이션도 다음과 같이 변경한다.
+
+```kotlin
+@Target(AnnotationTarget.FUNCTION)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class DistributedRedLock(
+    val key: String,
+    val waitTime: Long = 10L,
+    val leaseTime: Long = 5L,
+    // 락을 걸고 릴리즈하는 시간의 단위를 명시적으로 넘긴다.
+    val timeUnit: TimeUnit = TimeUnit.SECONDS,
+)
+```
+이 때 기존에 사용한 `WatchDog`옵션은 의미가 없어진다. 그리고 시간 단위를 명확하게 명시하자.
+
+최종적으로 다음과 같이 `Aspect`도 변경되어야 한다.
+
+```kotlin
+@Aspect
+@Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
+class DistributedRedLockAspect(
+    private val redissonClients: List<RedissonClient>,
+) {
+    private val log = logger<DistributedRedLockAspect>()
+    private val parser = SpelExpressionParser()
+
+    @Around("@annotation(io.basquiat.global.annotations.DistributedRedLock)")
+    fun lock(joinPoint: ProceedingJoinPoint): Any? {
+        val signature = joinPoint.signature as MethodSignature
+        val method = signature.method
+        val annotation = method.getAnnotation(DistributedRedLock::class.java)
+
+        val dynamicKey = getDynamicValue(signature.parameterNames, joinPoint.args, annotation.key)
+        if (dynamicKey.isBlank()) distributedLockError("Redlock 키를 생성할 수 없습니다. (Key: ${annotation.key})")
+
+        val lockName = "redlock:$dynamicKey"
+
+        // 기존과 다른 점은 3개의 독립된 Redis로부터 락을 가져온다.
+        val locks = redissonClients.map { it.getLock(lockName) }
+
+        // 이제는 RedissonMultiLock을 통해 Redlock을 사용해야 한다.
+        // 2개 이상의 노드에서 성공해야 락을 획득할 수 있다. RedLock 알고리즘
+        val multiLock = RedissonMultiLock(*locks.toTypedArray())
+
+        val startTime = System.currentTimeMillis()
+        log.info("[REDLOCK_ATTEMPT] Target: {} | Nodes: {}", lockName, redissonClients.size)
 
         return try {
-            Redisson.create(config)
+            val locked =
+                multiLock.tryLock(
+                    annotation.waitTime,
+                    annotation.leaseTime,
+                    annotation.timeUnit,
+                )
+
+            val waitDuration = System.currentTimeMillis() - startTime
+
+            if (!locked) {
+                log.warn("[REDLOCK_TIMEOUT] Failed to acquire lock for {} | Wait: {}ms", lockName, waitDuration)
+                distributedLockError("Redlock 획득 실패 (과반수 노드 응답 없음 또는 시간 초과): $lockName")
+            }
+
+            log.info("[REDLOCK_SUCCESS] Acquired lock for {} | Wait: {}ms", lockName, waitDuration)
+
+            joinPoint.proceed()
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            distributedLockError("Redlock 대기 중 인터럽트 발생: ${e.message}")
         } catch (e: Exception) {
-            throw RuntimeException("Redisson 센티넬 연결 실패! 마스터: $masterAlias, 원인: ${e.message}", e)
+            log.error("[REDLOCK_ERROR] 로직 수행 중 예외 발생: {}", e.message)
+            throw e
+        } finally {
+            try {
+                if (multiLock.isHeldByCurrentThread) {
+                    multiLock.unlock()
+                    log.info("[REDLOCK_RELEASE] Lock released for {}", lockName)
+                }
+            } catch (e: Exception) {
+                log.error("[REDLOCK_RELEASE_ERROR] Lock release failed for {}: {}", lockName, e.message)
+            }
         }
+    }
+
+    /**
+     * SpEL 파싱 로직
+     */
+    private fun getDynamicValue(
+        parameterNames: Array<String>,
+        args: Array<Any?>,
+        key: String,
+    ): String {
+        val context = StandardEvaluationContext()
+        for (i in parameterNames.indices) {
+            context.setVariable(parameterNames[i], args[i])
+        }
+
+        return runCatching {
+            parser.parseExpression(key).getValue(context, Any::class.java)?.toString()
+        }.getOrNull() ?: distributedLockError("SpEL 파싱 실패: $key")
     }
 }
 ```
 
-여기서는 서버 실행시
+기존과 크게 다르지 않지만 3개의 독립된 `Redis`로 부터 락을 획득하고 `Redisson`의 `RedissonMultiLock`을 활용한다.
 
-```text
-INFO 16420 --- [message-brokers-server] [           main] o.r.c.SentinelConnectionManager          : master: 127.0.0.1/127.0.0.1:6379 added
-INFO 16420 --- [message-brokers-server] [           main] o.r.c.SentinelConnectionManager          : slave: 127.0.0.1/127.0.0.1:6379 added
-INFO 16420 --- [message-brokers-server] [           main] o.r.c.SentinelConnectionManager          : slave: 127.0.0.1/127.0.0.1:6379 added
-INFO 16420 --- [message-brokers-server] [isson-netty-1-7] o.r.c.SentinelConnectionManager          : sentinel: redis://127.0.0.1:26400 added
+`Redisson`에서는 `RedLock`알고리즘을 제공하고 있기 때문에 우리는 고수준 `API`로 쉽게 활용할 수 있다.
+
+# 테스트
+
+이전에 우리가 활용한 `PlaceOrderHandler`에 이것을 적용해 보자.
+
+
+```kotlin
+@Service
+class PlaceOrderHandler(
+    private val productService: ProductService,
+    private val orderService: OrderService,
+) {
+    @Transactional
+    @DistributedRedLock(key = "#request.productId", waitTime = 10L, leaseTime = 5L)
+    @CacheEvict(value = ["product"], key = "#request.productId")
+    fun execute(request: PlaceOrder): PlaceOrderResponse {
+        val (productId, quantity) = request
+
+        val product =
+            productService
+                .findByIdOrThrow(productId, "해당 보물을 찾을 수 없습니다. 보물 아이디: $productId")
+        if (product.quantity < quantity) unableToJoin("재고가 부족하여 해적단에 합류할 수 없습니다!")
+        product.quantity -= quantity
+        val entity =
+            Order(
+                product = product,
+                quantity = quantity,
+                status = OrderStatus.COMPLETED,
+            )
+        val completeOrder = orderService.create(entity)
+        return PlaceOrderResponse(orderId = completeOrder.id)
+    }
+}
 ```
-`master/slave`접근 로그가 뜨면 된다.
 
-하지만 이후 외부 `IP`를 찾으려는 `netty`가 계속적으로 에러 로그를 발생시킨다.
-
-실제로 문제는 없지만 로컬 환경으로 인해 벌어지는 문제이므로 다음과 같이 `yaml`에 `logging.level`을 설정하자.
-
-```yaml
-logging:
-  level:
-    org.redisson.connection.SentinelConnectionManager: "OFF"
-    org.redisson.client.RedisClient: "OFF"
-```
-
-기존에 테스트해본 `LockTest`를 진행해 보자.
-
-여기서는 `NATS`를 통해 호출을 하기 때문에 `yaml`에서 `NATS`를 사용하도록 설정하거나 해당 테스트 코드를 수정해서 직접 테스트를 해보는 것을 추천한다.
-
-# Next Step
-
-이것은 센티넬 구조에서의 분산락을 구현한 것이다.
-
-하지만 금융권 레벨의 분산락을 구현하기 위해서는 `RedLock`으로 가야한다.
-
-이것은 구조 자체가 바뀌기 때문에 다음 브랜치에서 알아보고자 한다.
-
-[독립된 Redis Node를 이용한 RedLock](https://github.com/basquiat78/spring-boot-message-brokers/tree/09-redis-redlock)
+기존에 `LockTest`에서 수량을 디비에서 변경하고 입맛에 맞게 테스트를 해보면 된다.

@@ -4,7 +4,7 @@ import io.basquiat.domain.orders.code.OrderStatus
 import io.basquiat.domain.orders.entity.Order
 import io.basquiat.domain.orders.service.OrderService
 import io.basquiat.domain.product.service.ProductService
-import io.basquiat.global.annotations.DistributedLock
+import io.basquiat.global.annotations.DistributedRedLock
 import io.basquiat.global.utils.unableToJoin
 import io.basquiat.nats.model.PlaceOrder
 import io.basquiat.nats.model.PlaceOrderResponse
@@ -18,8 +18,8 @@ class PlaceOrderHandler(
     private val orderService: OrderService,
 ) {
     @Transactional
-    @DistributedLock(key = "#request.productId", waitTime = 10L, leaseTime = 3L, useWatchdog = true)
-    @CacheEvict(value = ["product"], key = "#request.productId") // 핵심: 낡은 캐시를 파괴한다!
+    @DistributedRedLock(key = "#request.productId", waitTime = 10L, leaseTime = 5L)
+    @CacheEvict(value = ["product"], key = "#request.productId")
     fun execute(request: PlaceOrder): PlaceOrderResponse {
         val (productId, quantity) = request
 
