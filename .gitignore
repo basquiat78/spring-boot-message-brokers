@@ -5,3 +5,4 @@
 /.gradle/
 /.kotlin/
 /brokers/nats/nui-db/
+/kafka-streams-state/onepiece-stream-aggregator/

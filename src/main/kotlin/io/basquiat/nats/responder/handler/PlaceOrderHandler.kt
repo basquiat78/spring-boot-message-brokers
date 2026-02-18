@@ -19,7 +19,7 @@ class PlaceOrderHandler(
 ) {
     @Transactional
     @DistributedLock(key = "#request.productId", waitTime = 10L, leaseTime = 3L, useWatchdog = true)
-    @CacheEvict(value = ["product"], key = "#request.productId") // 핵심: 낡은 캐시를 파괴한다!
+    @CacheEvict(value = ["product"], key = "#request.productId")
     fun execute(request: PlaceOrder): PlaceOrderResponse {
         val (productId, quantity) = request
 
