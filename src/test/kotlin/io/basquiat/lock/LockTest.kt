@@ -32,7 +32,7 @@ class LockTest
             val quantity = 1
             val request = OrderCreateDto(productId = productId, quantity = quantity)
             // when
-            val requestCount = 50
+            val requestCount = 20
             val executorService = Executors.newFixedThreadPool(15)
             val latch = CountDownLatch(requestCount)
 

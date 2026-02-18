@@ -65,11 +65,20 @@ spring:
         default-requeue-rejected: false
   data:
     redis:
-      host: localhost
-      port: 6400
       password:
       database: 0
       timeout: 2000
+      sentinel:
+        # sentinel.conf 에서 정한 alias, 별칭
+        master: basquiat
+        # 메인 노드를 첫번쨰로 두고
+        # 나머지 replica를 배열로 설정한다.
+        # 포트는 당연히 docker-compose.yml에 설정한 그 외부 포트로 설정한다.
+        # 이 부분 역시 개인에 맞춰서 수정해야 한다.
+        nodes:
+          - 127.0.0.1:26400
+          - 127.0.0.1:26401
+          - 127.0.0.1:26402
       lettuce:
         pool:
           max-active: 20
@@ -171,3 +180,8 @@ kafka:
   stream-aggregator: onepiece-stream-aggregator
   state-store-dir: "./kafka-streams-state"
   consumer-id: basquiat-local-consumer
+
+logging:
+  level:
+    org.redisson.connection.SentinelConnectionManager: "OFF"
+    org.redisson.client.RedisClient: "OFF"
