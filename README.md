@@ -400,6 +400,6 @@ logging:
 
 하지만 금융권 레벨의 분산락을 구현하기 위해서는 `RedLock`으로 가야한다.
 
-이것은 구조 자체가 바뀌기 때문에 다음 브랜치에서 알아보자.
+이것은 구조 자체가 바뀌기 때문에 다음 브랜치에서 알아보고자 한다.
 
 [독립된 Redis Node를 이용한 RedLock](https://github.com/basquiat78/spring-boot-message-brokers/tree/09-redis-redlock)
